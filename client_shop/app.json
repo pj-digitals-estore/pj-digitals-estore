@@ -18,7 +18,7 @@
     "version": "1.0.0",
     "android": {
       "adaptiveIcon": {
-        "backgroundColor": "#E6F4FE",
+        "backgroundColor": "#F5F0E4",
         "backgroundImage": "./assets/android-icon-background.png",
         "monochromeImage": "./assets/android-icon-monochrome.png",
         "foregroundImage": "./assets/android-icon-foreground.png"
@@ -27,3 +27,4 @@
     "name": "TDP Store Shop"
   }
 }
+

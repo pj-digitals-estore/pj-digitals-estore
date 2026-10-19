@@ -1,32 +1,22 @@
-# TDP Store Shop app (`client_shop`)
+# TDP Store Shop (`client_shop`)
 
-Standalone Expo Router app for shop owners and staff. This is a TypeScript conversion of the TDP Store `shop-portal` app. It is prepared as a folder for you to copy into the PJ repository; it has not been copied into that repository.
+Standalone Expo Router / React Native TypeScript app for shop owners and staff. It follows the customer app's cream, deep green, and gold colors and compact card style. It uses React Native `StyleSheet`, as the current customer client does; NativeWind is not configured in the shared client.
 
-## Copy into PJ
+## Add to PJ
 
-Copy the entire `client_shop` folder beside the existing `client` folder and `server` folder in the PJ repository. Do not put it inside `client/src/app`; it is a separate Expo app with its own `package.json`, `app.json`, routes, and assets.
+Copy this complete `client_shop` folder beside `client`, `client_admin`, `client_delivery`, and `server` in the PJ repository. It is a separate Expo app, not a route inside `client/src/app`.
 
-## Run it
+## Run locally
 
-Open a terminal in `client_shop`, then run:
-
-```powershell
-pnpm.cmd install
-pnpm.cmd run web
-```
-
-If pnpm is not available, use `npm.cmd install` then `npm.cmd run web`.
+From this folder, install dependencies with the package manager the team has chosen, then run the web or native Expo start script. For npm on Windows: `npm.cmd install` and `npm.cmd run web`.
 
 ## Included screens
 
-- Home dashboard with sales, active orders, and low-stock items.
-- Orders with sample status updates.
-- Deliveries with delivery details and progress controls.
-- Product search and a local add-product form.
-- Stock status with filters, quantity controls, edit, and delete.
-- Team list and local demo invite form.
+- Shop dashboard with sales, active orders, and low-stock items.
+- Orders and delivery progress views.
+- Product search and add-product form.
+- Stock status, quantity controls, edit, and delete.
+- Team list and local invite form.
 - Store status and profile details.
 
-## Demo limits
-
-Data is held in memory and resets when the app restarts. Forms do not call an API, save to a database, send invitations, or perform real delivery updates. Connect the backend later using the API your team agrees on.
+Demo content is scoped to a sample Thodupuzha electronics shop and shown in rupees. All data is held in memory. Forms, order updates, staff invitations, and inventory changes do not call an API or persist after restart.

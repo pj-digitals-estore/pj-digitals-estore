@@ -15,7 +15,7 @@ const tabs: Array<{ route: string; title: string; icon: IconName }> = [
 ];
 
 export default function ShopLayout() {
-  return <ShopDataProvider><Tabs screenOptions={{ headerShown: false, tabBarActiveTintColor: '#3677BD', tabBarInactiveTintColor: '#566476', tabBarStyle: { backgroundColor: '#F4F6F8', borderTopColor: '#CFD7E1', height: 60, paddingTop: 5, paddingBottom: 5 }, tabBarLabelStyle: { fontSize: 10, fontWeight: '700' } }}>
+  return <ShopDataProvider><Tabs screenOptions={{ headerShown: false, tabBarActiveTintColor: '#174E3C', tabBarInactiveTintColor: '#697568', tabBarStyle: { backgroundColor: '#FFFCF4', borderTopColor: '#DBCEAD', height: 62, paddingTop: 5, paddingBottom: 5 }, tabBarLabelStyle: { fontSize: 10, fontWeight: '700' } }}>
     {tabs.map(({ route, title, icon }) => <Tabs.Screen key={route} name={route} options={{ title, tabBarIcon: ({ color, size }) => <MaterialCommunityIcons name={icon} color={color} size={size} /> }} />)}
   </Tabs></ShopDataProvider>;
 }
