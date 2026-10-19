@@ -1,12 +1,14 @@
-export type Category = 'Phones' | 'Laptops' | 'Audio' | 'Accessories' | 'Gaming';
+export type Category = 'Electronics' | 'Textiles' | 'Home Appliances' | 'Computer Items';
 export type CategoryFilter = 'All' | Category;
-export type StoreId = 'all' | 'central' | 'north' | 'campus' | 'east' | 'west';
-export type Store = { id: StoreId; name: string; area: string; icon: string };
+export type StoreId = 'all' | 'vv' | 'sr' | 'textiles';
+export type DeliveryLocation = 'Thodupuzha, Idukki' | 'Muttom, Idukki';
+export type Store = { id: StoreId; name: string; area: string; icon: string; category?: Category; location?: DeliveryLocation };
 export type Product = {
   id: string;
   name: string;
   category: Category;
   price: number;
+  stock?: number;
   oldPrice?: number | null;
   emoji?: string;
   color?: string;
@@ -16,10 +18,13 @@ export type Product = {
   description?: string;
 };
 export type Order = {
+  deliveryAddress?: { id: string; name: string; phone: string; address: string; pincode: string; location: DeliveryLocation };
+  paymentMethod?: 'UPI' | 'Card';
+  paymentStatus?: string;
   id: string;
   date: string;
   status: string;
   total: number;
   items: Array<{ id: string; name: string; quantity: number }>;
 };
-export type Tab = 'Home' | 'Shop' | 'Stores' | 'Cart' | 'More' | 'Favorites' | 'Orders' | 'History' | 'Account' | 'Customer Care' | 'Add Item';
+export type Tab = 'Home' | 'Shop' | 'Supermarket' | 'Shops' | 'Cart' | 'Payment' | 'More' | 'Favorites' | 'Orders' | 'History' | 'Addresses' | 'Account' | 'Customer Care' | 'Add Item';

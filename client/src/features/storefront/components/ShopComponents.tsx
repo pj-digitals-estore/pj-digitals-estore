@@ -2,6 +2,7 @@ import { Pressable, ScrollView, TouchableOpacity, View } from 'react-native';
 import type { Product, Store } from '../data/types';
 import type { createStyles } from '../styles/appStyles';
 import Text from './AppText';
+import ProductPhoto from './ProductPhoto';
 
 type Styles = ReturnType<typeof createStyles>;
 type ProductCardProps = {
@@ -22,11 +23,11 @@ export function ProductCard({ product, styles, favorites, onOpen, onToggleFavori
       <View>
         <Pressable onPress={() => onOpen(product)} accessibilityRole="button" accessibilityLabel={`View ${product.name}`}>
           <View style={[styles.productArt, { backgroundColor: product.color ?? '#EAE8FF' }]}>
-            <Text style={styles.productEmoji}>{product.emoji ?? '📦'}</Text>
-            <View style={styles.productTag}><Text style={styles.productTagText}>{product.tag ?? 'IN STORE'}</Text></View>
+            <ProductPhoto key={product.id} product={product} />
+            <View style={styles.productTag}><Text style={styles.productTagText}>{product.stock === 0 ? 'SOLD OUT' : product.tag ?? 'IN STORE'}</Text></View>
           </View>
         </Pressable>
-        <TouchableOpacity onPress={() => onToggleFavorite(product.id)} style={styles.favoriteButton} accessibilityRole="button" accessibilityLabel={isFavorite ? 'Remove from favourites' : 'Add to favourites'}>
+        <TouchableOpacity onPress={() => onToggleFavorite(product.id)} style={styles.favoriteButton} accessibilityRole="button" accessibilityLabel={isFavorite ? 'Remove from wishlist' : 'Add to wishlist'} accessibilityState={{ selected: isFavorite }}>
           <Text style={styles.favoriteButtonText}>{isFavorite ? '♥' : '♡'}</Text>
         </TouchableOpacity>
       </View>
@@ -35,7 +36,7 @@ export function ProductCard({ product, styles, favorites, onOpen, onToggleFavori
         <TouchableOpacity onPress={() => onOpen(product)}><Text numberOfLines={1} style={styles.productName}>{product.name}</Text></TouchableOpacity>
         <Text style={styles.productPrice}>{money(product.price)}</Text>
         <Text style={styles.stockLine}>Available at {getStore(product.store).name}</Text>
-        <TouchableOpacity style={styles.addButton} onPress={() => onAdd(product)} accessibilityRole="button"><Text style={styles.addButtonText}>+  Add to cart</Text></TouchableOpacity>
+        <TouchableOpacity disabled={product.stock === 0} style={[styles.addButton, product.stock === 0 && { opacity: 0.5 }]} onPress={() => onAdd(product)} accessibilityRole="button" accessibilityState={{ disabled: product.stock === 0 }}><Text style={styles.addButtonText}>{product.stock === 0 ? 'Sold out' : '+  Add to cart'}</Text></TouchableOpacity>
       </View>
     </View>
   );
