@@ -21,6 +21,7 @@
   "packageManager": "pnpm@12.14.0",
   "type": "module",
   "dependencies": {
+    "@clerk/express": "^2.1.80",
     "cors": "^2.8.6",
     "dotenv": "^18.0.8",
     "express": "^5.3.0",
