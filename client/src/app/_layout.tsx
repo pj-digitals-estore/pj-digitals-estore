@@ -1,18 +1,16 @@
-import { DarkTheme, DefaultTheme, ThemeProvider } from 'expo-router';
-import * as SplashScreen from 'expo-splash-screen';
-import { useColorScheme } from 'react-native';
+import { Stack } from 'expo-router';
+import { useRef } from 'react';
+import { Animated, useWindowDimensions, View } from 'react-native';
+import LaunchIntro from '@/features/storefront/components/LaunchIntro';
+import { StoreThemeProvider } from '@/features/storefront/ThemeContext';
 
-import { AnimatedSplashOverlay } from '@/components/animated-icon';
-import AppTabs from '@/components/app-tabs';
-
-SplashScreen.preventAutoHideAsync();
-
-export default function TabLayout() {
-  const colorScheme = useColorScheme();
-  return (
-    <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
-      <AnimatedSplashOverlay />
-      <AppTabs />
-    </ThemeProvider>
-  );
+export default function RootLayout() {
+  const transition = useRef(new Animated.Value(0)).current;
+  const { width } = useWindowDimensions();
+  return <StoreThemeProvider><View style={{ flex: 1, overflow: 'hidden' }}>
+    <Animated.View style={{ flex: 1, transform: [{ translateX: transition.interpolate({ inputRange: [0, 1], outputRange: [width, 0] }) }] }}>
+      <Stack screenOptions={{ headerShown: false }} />
+    </Animated.View>
+    <LaunchIntro transition={transition} />
+  </View></StoreThemeProvider>;
 }
