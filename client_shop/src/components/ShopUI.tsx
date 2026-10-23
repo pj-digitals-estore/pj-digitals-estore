@@ -1,8 +1,8 @@
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import type { PropsWithChildren } from 'react';
 import type { StyleProp, ViewStyle } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useShop } from '../context/ShopDataContext';
 
 export const C = { bg: '#F5F0E4', panel: '#FFFCF4', raised: '#E5E9DC', soft: '#E5E9DC', tint: '#F1E2BB', line: '#DBCEAD', text: '#173D32', muted: '#697568', blue: '#174E3C', cyan: '#9A702A', green: '#174E3C', amber: '#9A702A', red: '#A95237' };
 export const S = StyleSheet.create({
@@ -27,16 +27,31 @@ export const S = StyleSheet.create({
 });
 
 export function Page({ title, subtitle, children }: PropsWithChildren<{ title: string; subtitle: string }>) {
- const { isOpen } = useShop();
- return <SafeAreaView style={S.page} edges={['top']}><ScrollView contentContainerStyle={S.content} keyboardShouldPersistTaps="handled">
- <View style={S.brand}><View style={S.mark}><Text style={S.markText}>T</Text></View><View><Text style={S.brandTitle}>TDP STORE PARTNER</Text><Text style={S.brandSub}>VV Electricals · Thodupuzha</Text></View><View style={[S.online, !isOpen && { backgroundColor: '#F4E3D8' }]}><Text style={[S.onlineText, !isOpen && { color: C.red }]}>{isOpen ? '● OPEN' : '● PAUSED'}</Text></View></View>
-  <Text style={S.title}>{title}</Text><Text style={S.subtitle}>{subtitle}</Text>{children}
+ const [refreshing, setRefreshing] = useState(false);
+ const [refreshed, setRefreshed] = useState(false);
+ const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+ useEffect(() => () => { if (timer.current) clearTimeout(timer.current); }, []);
+ const refresh = useCallback(() => {
+  if (timer.current) return;
+  setRefreshing(true); setRefreshed(false);
+  // Local preview: preserve current products, stock, ads and filters.
+  timer.current = setTimeout(() => {
+   setRefreshing(false); setRefreshed(true); timer.current = null;
+  }, 650);
+ }, []);
+ return <SafeAreaView style={S.page} edges={['left', 'right', 'bottom']}><ScrollView contentContainerStyle={S.content} keyboardShouldPersistTaps="handled" contentInsetAdjustmentBehavior="never" alwaysBounceVertical refreshControl={<RefreshControl refreshing={refreshing} onRefresh={refresh} tintColor={C.green} colors={[C.green]} progressBackgroundColor={C.panel} />}>
+  <View style={[S.spread, { gap: 12 }]}>
+    <Text style={[S.title, { flex: 1 }]}>{title}</Text>
+  </View>
+  {refreshed ? <Text accessibilityLiveRegion="polite" style={[S.small, { marginTop: 8 }]}>Demo refreshed · your changes are kept. No live data connected.</Text> : null}
+  <Text style={S.subtitle}>{subtitle}</Text>{children}
  </ScrollView></SafeAreaView>;
 }
 export function Card({ children, style }: PropsWithChildren<{ style?: StyleProp<ViewStyle> }>) { return <View style={[S.card, style]}>{children}</View>; }
 export function Section({ children }: PropsWithChildren) { return <Text style={S.section}>{children}</Text>; }
 export function Button({ label, onPress, secondary = false, style }: { label: string; onPress: () => void; secondary?: boolean; style?: StyleProp<ViewStyle> }) { return <Pressable onPress={onPress} style={[secondary ? S.secondary : S.btn, style]}><Text style={secondary ? S.secondaryText : S.btnText}>{label}</Text></Pressable>; }
 const badgeTones: Record<string, [string, string]> = {
+  'Awaiting pickup': [C.amber, C.tint], 'Status pending': [C.muted, C.soft],
   New: [C.blue, C.tint], Preparing: [C.amber, C.tint], Ready: [C.cyan, C.soft], Completed: [C.green, C.soft],
   'Low stock': [C.red, '#F4E3D8'], 'Out of stock': [C.red, '#F4E3D8'], 'In stock': [C.green, C.soft], Owner: [C.blue, C.soft],
   'Ready for pickup': [C.cyan, C.soft], 'Picked up': [C.blue, C.tint], 'In transit': [C.amber, C.tint], 'Out for delivery': [C.cyan, C.soft], Delivered: [C.green, C.soft],

@@ -1,1 +1,0 @@
-export { Team as default } from '../screens/ShopScreens';

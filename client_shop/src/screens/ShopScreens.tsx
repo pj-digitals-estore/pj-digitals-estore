@@ -1,4 +1,6 @@
 import { useMemo, useState } from 'react';
+import { useRouter } from 'expo-router';
+import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { Alert, Modal, Pressable, ScrollView, Text, TextInput, View } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Badge, Button, Card, Metric, Page, Section, C, S } from '../components/ShopUI';
@@ -6,9 +8,16 @@ import { useShop } from '../context/ShopDataContext';
 import type { Delivery, Order, Product, ProductUpdate } from '../context/ShopDataContext';
 
 const cash = (n: number): string => '₹' + Math.round(Number(n)).toLocaleString('en-IN');
-function OrderRow({ order, advance }: { order: Order; advance: () => void }) {
- const next = ({ New: 'Accept order', Preparing: 'Mark ready', Ready: 'Complete order' } as Partial<Record<Order['status'], string>>)[order.status];
- return <View style={S.dividerRow}><View style={S.row}><View style={{ flex: 1 }}><Text style={S.orderId}>{order.id} · {order.customer}</Text><Text style={S.small}>{order.items} item{order.items === 1 ? '' : 's'} · {order.time}</Text></View><View style={{ alignItems: 'flex-end' }}><Text style={S.price}>{cash(order.total)}</Text><View style={{ marginTop: 6 }}><Badge value={order.status} /></View></View></View>{next ? <Pressable onPress={advance} style={[S.btn, { alignSelf: 'flex-start', paddingVertical: 8, marginTop: 9 }]}><Text style={S.btnText}>{next}  ›</Text></Pressable> : null}</View>;
+function deliveryLabel(status?: Delivery['status']) {
+ if (!status) return 'Status pending';
+ if (status === 'Preparing' || status === 'Ready for pickup') return 'Awaiting pickup';
+ if (status === 'Picked up' || status === 'In transit') return 'Picked up';
+ return status;
+}
+function OrderRow({ order }: { order: Order }) {
+ const { deliveries } = useShop();
+ const status = deliveryLabel(deliveries.find(delivery => delivery.orderId === order.id)?.status);
+ return <View style={S.dividerRow}><View style={S.row}><View style={{ flex: 1 }}><Text style={S.orderId}>{order.id} · {order.customer}</Text><Text style={S.small}>{order.items} item{order.items === 1 ? '' : 's'} · {order.time}</Text></View><View style={{ alignItems: 'flex-end' }}><Text style={S.price}>{cash(order.total)}</Text><View style={{ marginTop: 6 }}><Badge value={status} /></View></View></View></View>;
 }
 function ProductRow({ product }: { product: Product }) {
  const symbol = product.category === 'Textiles' ? '▱' : product.category === 'Computer Items' ? '⌘' : product.category === 'Home Appliances' ? '⌂' : '◇';
@@ -35,45 +44,57 @@ function TeamModal({ visible, close }: { visible: boolean; close: () => void }) 
 }
 
 export function Home() {
- const { orders, products, isOpen, advanceOrder } = useShop();
+ const { orders, products } = useShop();
+ const router = useRouter();
+ const [addingProduct, setAddingProduct] = useState(false);
  const openOrders = orders.filter((o) => o.status !== 'Completed'); const low = products.filter((p) => p.stock <= 4);
  return <Page title="Good morning" subtitle="Here is what is happening at your shop today.">
-  <LinearGradient colors={['#277052', '#174E3C', '#10382A']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={S.banner}><Text style={S.eyebrow}>YOUR STORE AT A GLANCE</Text><Text style={S.bannerTitle}>{isOpen ? 'Your store is open for business.' : 'Your store is paused.'}</Text><Text style={S.bannerCopy}>Manage new orders, keep products in stock, and help customers find what they need.</Text></LinearGradient>
+  <LinearGradient colors={['#277052', '#174E3C', '#10382A']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={S.banner}><Text style={S.eyebrow}>YOUR STORE AT A GLANCE</Text><Text style={S.bannerTitle}>Your shop, all in one place.</Text><Text style={S.bannerCopy}>View orders, keep products in stock, and help customers find what they need.</Text></LinearGradient>
   <View style={S.metrics}><Metric label="Sales today" value="₹1,24,800" foot="↑ 12% from yesterday" /><Metric label="Active orders" value={String(openOrders.length).padStart(2, '0')} foot="Orders needing attention" /><Metric label="Products listed" value={String(products.length).padStart(2, '0')} foot="In your catalogue" /></View>
-  <Section>Orders to action</Section><Card>{openOrders.slice(0, 3).map((order) => <OrderRow key={order.id} order={order} advance={() => advanceOrder(order.id)} />)}</Card>
+  <Section>Quick actions</Section>
+  <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 12 }}>
+    <Pressable accessibilityRole="button" onPress={() => setAddingProduct(true)} style={[S.card, { flex: 1, minWidth: 140, padding: 18, gap: 9 }]}>
+      <MaterialCommunityIcons name="plus-box-outline" size={28} color={C.green} />
+      <Text style={S.name}>Add Product</Text><Text style={[S.small, { lineHeight: 18 }]}>List a new item in your shop</Text>
+    </Pressable>
+    <Pressable accessibilityRole="button" onPress={() => router.navigate('/inventory')} style={[S.card, { flex: 1, minWidth: 140, padding: 18, gap: 9 }]}>
+      <MaterialCommunityIcons name="package-variant-closed" size={28} color={C.amber} />
+      <Text style={S.name}>Update Stock</Text><Text style={[S.small, { lineHeight: 18 }]}>Adjust quantities and manage stock</Text>
+    </Pressable>
+  </View>
+  <ProductModal visible={addingProduct} close={() => setAddingProduct(false)} />
+  <Section>Active orders</Section><Card>{openOrders.slice(0, 3).map((order) => <OrderRow key={order.id} order={order} />)}</Card>
   <Section>Stock to check · {low.length} items</Section><Card>{low.length ? low.map((product) => <ProductRow key={product.id} product={product} />) : <Text style={S.small}>Everything is well stocked.</Text>}</Card>
   <Text style={[S.small, { textAlign: 'center', marginTop: 18 }]}>Front-end preview · Sample data only</Text>
  </Page>;
 }
 export function Orders() {
- const { orders, advanceOrder } = useShop(); const [filter, setFilter] = useState('All');
- const visible = filter === 'All' ? orders : orders.filter((o) => o.status === filter);
- return <Page title="Orders" subtitle="Review incoming purchases and move each order along."><Filter items={['All', 'New', 'Preparing', 'Ready', 'Completed']} value={filter} onChange={setFilter} /><Card>{visible.length ? visible.map((o) => <OrderRow key={o.id} order={o} advance={() => advanceOrder(o.id)} />) : <Text style={S.small}>No orders in this group.</Text>}</Card><Text style={[S.small, { marginTop: 12 }]}>Order updates are temporary until the backend is connected.</Text></Page>;
+ const { orders, deliveries } = useShop(); const [filter, setFilter] = useState('All');
+ const visible = filter === 'All' ? orders : orders.filter(order => deliveryLabel(deliveries.find(delivery => delivery.orderId === order.id)?.status) === filter);
+ return <Page title="Orders" subtitle="Track pickup and delivery for your shop’s orders."><Filter items={['All', 'Awaiting pickup', 'Picked up', 'Out for delivery', 'Delivered']} value={filter} onChange={setFilter} /><Card>{visible.length ? visible.map((o) => <OrderRow key={o.id} order={o} />) : <Text style={S.small}>No orders in this group.</Text>}</Card><Text style={[S.small, { marginTop: 12 }]}>View only · Sample pickup and delivery statuses.</Text></Page>;
 }
-function DeliveryCard({ delivery, advance }: { delivery: Delivery; advance: () => void }) {
- const next = ({ Preparing: 'Ready for pickup', 'Ready for pickup': 'Confirm pickup', 'Picked up': 'Mark in transit', 'In transit': 'Out for delivery', 'Out for delivery': 'Mark delivered' } as Partial<Record<Delivery['status'], string>>)[delivery.status];
- const steps = ['Picked up', 'In transit', 'Out for delivery', 'Delivered'];
- const current: Record<Delivery['status'], number> = { Preparing: -1, 'Ready for pickup': -1, 'Picked up': 0, 'In transit': 1, 'Out for delivery': 2, Delivered: 3 };
+function DeliveryCard({ delivery }: { delivery: Delivery }) {
+ const steps = ['Pickup', 'Delivery'];
+ const current: Record<Delivery['status'], number> = { Preparing: -1, 'Ready for pickup': -1, 'Picked up': 0, 'In transit': 0, 'Out for delivery': 0, Delivered: 1 };
  const currentStep = current[delivery.status];
  return <Card style={{ marginBottom: 12 }}>
-  <View style={[S.row, { justifyContent: 'space-between' }]}><View><Text style={S.orderId}>{delivery.id} · Order {delivery.orderId}</Text><Text style={S.small}>{delivery.customer} · {delivery.items} item{delivery.items === 1 ? '' : 's'}</Text></View><Badge value={delivery.status} /></View>
+  <View style={[S.row, { justifyContent: 'space-between', gap: 12 }]}><View style={{ flex: 1 }}><Text style={S.orderId}>{delivery.id} · Order {delivery.orderId}</Text><Text style={S.small}>{delivery.customer} · {delivery.items} item{delivery.items === 1 ? '' : 's'}</Text></View><Badge value={deliveryLabel(delivery.status)} /></View>
   <View style={[S.productRow, { marginTop: 9 }]}><View style={{ flex: 1 }}><Text style={S.small}>DELIVERY ADDRESS</Text><Text style={[S.name, { marginTop: 4 }]}>{delivery.address}</Text></View><View style={{ alignItems: 'flex-end' }}><Text style={S.small}>ORDER TOTAL</Text><Text style={[S.price, { marginTop: 4 }]}>{cash(delivery.total)}</Text></View></View>
   <View style={[S.row, { justifyContent: 'space-between', paddingVertical: 10 }]}><Text style={S.small}>Driver: {delivery.driver}</Text><Text style={S.small}>{delivery.window}</Text></View>
   <View style={[S.row, { justifyContent: 'space-between', marginTop: 4, marginBottom: 2 }]}>{steps.map((step, index) => <View key={step} style={{ flex: 1, alignItems: index === 0 ? 'flex-start' : index === steps.length - 1 ? 'flex-end' : 'center' }}><Text style={{ color: index <= currentStep ? C.green : C.muted, fontSize: 9, fontWeight: '700' }}>{index <= currentStep ? '●' : '○'} {step}</Text></View>)}</View>
-  {next ? <Pressable onPress={advance} style={[S.btn, { alignSelf: 'flex-start', marginTop: 12 }]}><Text style={S.btnText}>{next}  ›</Text></Pressable> : null}
  </Card>;
 }
 
 export function Deliveries() {
- const { deliveries, advanceDelivery } = useShop();
+ const { deliveries } = useShop();
  const [filter, setFilter] = useState('All');
  const shown = deliveries.filter((d) => filter === 'All' || (filter === 'Delivered' ? d.status === 'Delivered' : d.status !== 'Delivered'));
- return <Page title="Deliveries" subtitle="Check each order's delivery details and update its progress.">
-  <View style={S.metrics}><Metric label="In progress" value={String(deliveries.filter((d) => d.status !== 'Delivered').length)} foot="Need a delivery update" /><Metric label="Delivered" value={String(deliveries.filter((d) => d.status === 'Delivered').length)} foot="Completed drop-offs" /></View>
+ return <Page title="Deliveries" subtitle="View delivery details and the current progress of each order.">
+  <View style={S.metrics}><Metric label="In progress" value={String(deliveries.filter((d) => d.status !== 'Delivered').length)} foot="Deliveries being tracked" /><Metric label="Delivered" value={String(deliveries.filter((d) => d.status === 'Delivered').length)} foot="Completed drop-offs" /></View>
   <Section>Delivery orders</Section>
   <Filter items={['All', 'In progress', 'Delivered']} value={filter} onChange={setFilter} />
-  {shown.length ? shown.map((delivery) => <DeliveryCard key={delivery.id} delivery={delivery} advance={() => advanceDelivery(delivery.id)} />) : <Card><Text style={S.small}>No deliveries in this group.</Text></Card>}
-  <Text style={[S.small, { marginTop: 6 }]}>Driver assignment and delivery updates are sample data until the delivery API is connected.</Text>
+  {shown.length ? shown.map((delivery) => <DeliveryCard key={delivery.id} delivery={delivery} />) : <Card><Text style={S.small}>No deliveries in this group.</Text></Card>}
+  <Text style={[S.small, { marginTop: 6 }]}>View only · Sample delivery statuses.</Text>
  </Page>;
 }
 export function Products() {
@@ -175,12 +196,8 @@ export function Team() {
  return <Page title="Your team" subtitle="Give staff clear roles to help run the store together."><Card><Text style={S.orderId}>Access at a glance</Text><Text style={[S.small, { lineHeight: 19, marginTop: 6 }]}>Owners manage the whole store. Managers oversee daily work. Staff can help with orders or stock.</Text></Card><View style={[S.row, { justifyContent: 'space-between', marginVertical: 13 }]}><Text style={S.orderId}>Team members ({team.length})</Text><Button label="＋ Invite staff" onPress={() => setShow(true)} /></View><Card>{team.map((person, index) => <View key={person.id} style={[S.productRow, index === team.length - 1 && { borderBottomWidth: 0 }]}><View style={S.avatar}><Text style={S.avatarText}>{person.initials}</Text></View><View style={{ flex: 1 }}><Text style={S.name}>{person.name}</Text><Text style={S.small}>{person.email}</Text></View><View style={{ alignItems: 'flex-end' }}><Badge value={person.role} /><Text style={[S.small, { color: C.green }]}>Active</Text></View></View>)}</Card><TeamModal visible={show} close={() => setShow(false)} /></Page>;
 }
 export function Store() {
- const { isOpen, setIsOpen } = useShop(); const [notice, setNotice] = useState(false);
- return <Page title="Store settings" subtitle="Control how your shop appears to customers.">
-  <LinearGradient colors={['#277052', '#174E3C', '#10382A']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={S.banner}><Text style={S.eyebrow}>SHOP STATUS</Text><Text style={S.bannerTitle}>{isOpen ? 'Taking new orders' : 'Not taking orders'}</Text><Text style={S.bannerCopy}>{isOpen ? 'Customers can browse and place orders.' : 'Your store is paused from new orders.'}</Text><Pressable onPress={() => setIsOpen(!isOpen)} style={[S.secondary, { alignSelf: 'flex-start', backgroundColor: '#FFFCF4', marginTop: 15 }]}><Text style={{ color: '#174E3C', fontWeight: '800', fontSize: 12 }}>{isOpen ? 'Pause store' : 'Open store'}</Text></Pressable></LinearGradient>
-  <Section>Store profile</Section><Card>{[['Store name', 'VV Electricals'], ['Category', 'Electronics & home appliances'], ['Location', 'MG Road, Thodupuzha'], ['Opening hours', 'Mon–Sat · 9 AM–8 PM']].map((row, i) => <View key={row[0]} style={[S.row, { justifyContent: 'space-between', paddingVertical: 14, borderBottomColor: C.line, borderBottomWidth: i === 3 ? 0 : 1 }]}><Text style={S.small}>{row[0]}</Text><Text style={[S.name, { fontSize: 11 }]}>{row[1]}</Text></View>)}</Card>
-  <Section>Store tools</Section><Card>{[['↗', 'Customer store page', 'See how customers find your shop'], ['⌖', 'Pickup and delivery', 'Pickup and local delivery enabled'], ['◈', 'Notifications', 'Order alerts are enabled']].map((row) => <Pressable key={row[1]} onPress={() => { setNotice(true); setTimeout(() => setNotice(false), 2200); }} style={S.productRow}><View style={S.glyph}><Text style={S.glyphText}>{row[0]}</Text></View><View style={{ flex: 1 }}><Text style={S.name}>{row[1]}</Text><Text style={S.small}>{row[2]}</Text></View><Text style={{ color: C.muted, fontSize: 20 }}>›</Text></Pressable>)}</Card>
-  {notice ? <Text style={[S.small, { marginTop: 12, textAlign: 'center' }]}>This setting can be connected when the API is ready.</Text> : null}
+ return <Page title="Shop profile" subtitle="Your shop’s details.">
+  <Section>Store profile</Section><Card>{[['Store name', 'VV Electricals'], ['Category', 'Electronics & home appliances'], ['Location', 'MG Road, Thodupuzha']].map((row, i) => <View key={row[0]} style={[S.row, { justifyContent: 'space-between', paddingVertical: 14, borderBottomColor: C.line, borderBottomWidth: i === 2 ? 0 : 1 }]}><Text style={S.small}>{row[0]}</Text><Text style={[S.name, { fontSize: 11 }]}>{row[1]}</Text></View>)}</Card>
  </Page>;
 }
 
