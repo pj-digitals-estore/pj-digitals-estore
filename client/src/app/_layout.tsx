@@ -7,9 +7,12 @@ import LaunchIntro from '@/features/storefront/components/LaunchIntro';
 import { StoreThemeProvider, useStoreTheme } from '@/features/storefront/ThemeContext';
 import { ServerConnection } from '../components/ServerConnection';
 import { CustomerAuthProvider } from '../features/auth/CustomerAuthContext';
+import CustomerClerkProvider from '../features/auth/CustomerClerkProvider';
 
 export default function RootLayout() {
-  return <SafeAreaProvider initialMetrics={initialWindowMetrics}><StoreThemeProvider><CustomerAuthProvider><AppShell /></CustomerAuthProvider></StoreThemeProvider></SafeAreaProvider>;
+  const publishableKey = process.env.EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY;
+  if (!publishableKey) throw new Error('Set EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY in client/.env.local and restart Expo.');
+  return <CustomerClerkProvider publishableKey={publishableKey}><SafeAreaProvider initialMetrics={initialWindowMetrics}><StoreThemeProvider><CustomerAuthProvider><AppShell /></CustomerAuthProvider></StoreThemeProvider></SafeAreaProvider></CustomerClerkProvider>;
 }
 
 function AppShell() {
