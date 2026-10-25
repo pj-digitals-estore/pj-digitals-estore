@@ -7,6 +7,7 @@ import { clerkWebhook } from "./controllers/webhooks.js";
 import makeAdmin from "./scripts/makeAdmin.js";
 import ProductRouter from "./routes/productsRoutes.js";
 import CartRouter from "./routes/cartRoutes.js";
+import OrderRouter from "./routes/ordersRoute.js";
 
 const app = express();
 
@@ -30,6 +31,7 @@ app.get("/", (req: Request, res: Response) => {
 
 app.use("/api/products", ProductRouter);
 app.use("/api/cart", CartRouter);
+app.use("/api/orders", OrderRouter)
 
 await makeAdmin();
 
