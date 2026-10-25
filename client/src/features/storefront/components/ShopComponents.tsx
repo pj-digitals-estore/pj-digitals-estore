@@ -1,10 +1,11 @@
 import { Pressable, ScrollView, TouchableOpacity, View } from 'react-native';
 import type { Product, Store } from '../data/types';
 import type { createStyles } from '../styles/appStyles';
+import type { createWebStyles } from '../styles/webStyles';
 import Text from './AppText';
 import ProductPhoto from './ProductPhoto';
 
-type Styles = ReturnType<typeof createStyles>;
+type Styles = ReturnType<typeof createStyles> | ReturnType<typeof createWebStyles>;
 type ProductCardProps = {
   product: Product;
   styles: Styles;
@@ -22,7 +23,7 @@ export function ProductCard({ product, styles, favorites, onOpen, onToggleFavori
     <View style={styles.productCard}>
       <View>
         <Pressable onPress={() => onOpen(product)} accessibilityRole="button" accessibilityLabel={`View ${product.name}`}>
-          <View style={[styles.productArt, { backgroundColor: product.color ?? '#EAE8FF' }]}>
+          <View style={[styles.productArt, { backgroundColor: product.color ?? '#FFF0CF' }]}>
             <ProductPhoto key={product.id} product={product} />
             <View style={styles.productTag}><Text style={styles.productTagText}>{product.stock === 0 ? 'SOLD OUT' : product.tag ?? 'IN STORE'}</Text></View>
           </View>

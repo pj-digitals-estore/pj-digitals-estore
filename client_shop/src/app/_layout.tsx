@@ -9,6 +9,7 @@ import { PartnerLoadingScreen } from '../components/PartnerLoadingScreen';
 import { ShopDataProvider } from '../context/ShopDataContext';
 import { ShopAuthProvider, useShopAuth } from '../context/ShopAuthContext';
 import { ShopLoginScreen } from '../screens/ShopLoginScreen';
+import { ServerConnection } from '../components/ServerConnection';
 
 type IconName = ComponentProps<typeof MaterialCommunityIcons>['name'];
 const tabs: Array<{ route: string; title: string; icon: IconName }> = [
@@ -25,7 +26,7 @@ export default function ShopLayout() {
   const [loading, setLoading] = useState(true);
   const finishLoading = useCallback(() => setLoading(false), []);
   return <ShopAuthProvider><View style={{ flex: 1 }}>
-    <View style={{ flex: 1 }} pointerEvents={loading ? 'none' : 'auto'} accessibilityElementsHidden={loading} importantForAccessibility={loading ? 'no-hide-descendants' : 'auto'}><ShopNavigation /></View>
+    <View style={{ flex: 1 }} pointerEvents={loading ? 'none' : 'auto'} accessibilityElementsHidden={loading} importantForAccessibility={loading ? 'no-hide-descendants' : 'auto'}><ServerConnection><ShopNavigation /></ServerConnection></View>
     {loading ? <PartnerLoadingScreen onFinish={finishLoading} /> : null}
   </View></ShopAuthProvider>;
 }

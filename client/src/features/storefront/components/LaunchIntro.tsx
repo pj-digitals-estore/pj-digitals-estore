@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
+import BrandLogo from '@/components/BrandLogo';
 import { AccessibilityInfo, Animated, Easing, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
-import PalmFrond from './PalmFrond';
-import KasavuBorder from './KasavuBorder';
+import { LinearGradient } from 'expo-linear-gradient';
 
 export default function LaunchIntro({ transition: exit }: { transition: Animated.Value }) {
   const { width } = useWindowDimensions();
@@ -30,36 +30,30 @@ export default function LaunchIntro({ transition: exit }: { transition: Animated
   }, [entrance, exit, loading]);
 
   if (!visible) return null;
-  return <Animated.View style={[styles.overlay, { transform: [{ translateX: exit.interpolate({ inputRange: [0, 1], outputRange: [0, -width] }) }] }]} accessibilityViewIsModal accessibilityLabel="Welcome to TDP Store">
-    <View style={styles.topTrim}><KasavuBorder /></View>
-    <Animated.View pointerEvents="none" style={[styles.palmTop, { opacity: entrance, transform: [{ translateX: entrance.interpolate({ inputRange: [0, 1], outputRange: [45, 0] }) }] }]}><PalmFrond /></Animated.View>
-    <Animated.View pointerEvents="none" style={[styles.palmBottom, { opacity: entrance, transform: [{ translateX: entrance.interpolate({ inputRange: [0, 1], outputRange: [-45, 0] }) }, { rotate: '180deg' }] }]}><PalmFrond /></Animated.View>
+  return <Animated.View style={[styles.overlay, { transform: [{ translateX: exit.interpolate({ inputRange: [0, 1], outputRange: [0, -width] }) }] }]} accessibilityViewIsModal accessibilityLabel="Welcome to NearBy">
+    <LinearGradient colors={['#F3EBFF', '#DDC7F5', '#C7A5E8']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={StyleSheet.absoluteFill} />
     <Animated.View style={[styles.center, { opacity: entrance, transform: [{ translateY: entrance.interpolate({ inputRange: [0, 1], outputRange: [30, 0] }) }] }]}>
-      <View style={styles.halo}><View style={styles.logo}><Text style={styles.logoText}>TDP</Text></View></View>
-      <Text style={styles.name}>TDP Store</Text>
-      <View style={styles.ornament}><View style={styles.line} /><Text style={styles.flower}>✳</Text><View style={styles.line} /></View>
-      <Text style={styles.local}>ROOTED IN THODUPUZHA</Text>
+      <View style={styles.halo}><BrandLogo size={100} /></View>
+      <Text style={styles.name}>NearBy</Text>
+      <Text style={styles.local}>YOUR LOCAL MARKETPLACE</Text>
       <Text style={styles.tagline}>Your town. Your shops. Your doorstep.</Text>
     </Animated.View>
     <View style={styles.footer}>
       <Text style={styles.loadingLabel}>GETTING YOUR STORE READY</Text>
       <View style={styles.loadingTrack}><Animated.View style={[styles.loadingBar, { transform: [{ translateX: loading.interpolate({ inputRange: [0, 1], outputRange: [-220, 0] }) }] }]} /></View>
-      <Text style={styles.footerText}>KERALA, WITH CARE</Text><Text style={styles.delivery}>Local favourites · Delivered within 12 hours</Text>
+      <Text style={styles.footerText}>CLOSER TO WHAT YOU LOVE</Text><Text style={styles.delivery}>Local favourites · Delivered within 12 hours</Text>
     </View>
-    <View style={styles.bottomTrim}><KasavuBorder /></View>
   </Animated.View>;
 }
 
 const styles = StyleSheet.create({
-  overlay: { ...StyleSheet.absoluteFill, zIndex: 1000, backgroundColor: '#10382A', alignItems: 'center', justifyContent: 'center' },
-  topTrim: { position: 'absolute', top: 0, left: 0, right: 0 }, bottomTrim: { position: 'absolute', bottom: 0, left: 0, right: 0 },
-  palmTop: { position: 'absolute', right: 12, top: 85, transform: [{ scale: 1.6 }] }, palmBottom: { position: 'absolute', left: 8, bottom: 115 },
-  center: { alignItems: 'center', paddingHorizontal: 24 }, halo: { borderWidth: 1, borderColor: 'rgba(229,199,133,0.35)', borderRadius: 50, padding: 9 },
-  logo: { width: 80, height: 80, borderRadius: 40, borderWidth: 1, borderColor: '#E5C785', backgroundColor: '#194E3B', alignItems: 'center', justifyContent: 'center' }, logoText: { color: '#F0DDA8', fontSize: 24, fontWeight: '800', letterSpacing: 2 },
-  name: { color: '#FFF8E8', fontSize: 36, fontWeight: '600', marginTop: 22, letterSpacing: -1 },
-  ornament: { flexDirection: 'row', alignItems: 'center', gap: 15, marginTop: 17 }, line: { width: 43, height: 1, backgroundColor: '#A98A49' }, flower: { color: '#E5C785', fontSize: 18 },
-  local: { color: '#E5C785', fontSize: 9, fontWeight: '800', letterSpacing: 2.3, marginTop: 18 }, tagline: { color: '#CFD8C7', fontSize: 12, marginTop: 10, textAlign: 'center' },
-  loadingLabel: { color: '#CFD8C7', fontSize: 8, letterSpacing: 1.2, marginBottom: 10 },
-  loadingTrack: { width: 220, height: 4, borderRadius: 4, backgroundColor: '#355646', marginBottom: 25, overflow: 'hidden' }, loadingBar: { width: '100%', height: 4, borderRadius: 4, backgroundColor: '#E5C785' },
-  footer: { position: 'absolute', bottom: 45, alignItems: 'center', paddingHorizontal: 20 }, footerText: { color: '#E5C785', fontSize: 8, letterSpacing: 2, fontWeight: '700' }, delivery: { color: '#B7C9B6', fontSize: 10, marginTop: 8 },
+  overlay: { ...StyleSheet.absoluteFill, zIndex: 1000, backgroundColor: '#EEE5F8', alignItems: 'center', justifyContent: 'center' },
+  center: { alignItems: 'center', paddingHorizontal: 24 }, halo: { borderWidth: 1, borderColor: 'rgba(85,67,15,0.22)', borderRadius: 50, padding: 9 },
+  logo: { boxShadow: '0px 6px 20px rgba(77, 43, 112, 0.16)', width: 80, height: 80, borderRadius: 40, borderWidth: 1, borderColor: '#AA85CC', backgroundColor: '#FFFFFF', alignItems: 'center', justifyContent: 'center' }, logoText: { color: '#30243F', fontSize: 24, fontWeight: '800', letterSpacing: 2 },
+  name: { color: '#30243F', fontSize: 36, fontWeight: '600', marginTop: 22, letterSpacing: -1 },
+  ornament: { flexDirection: 'row', alignItems: 'center', gap: 15, marginTop: 17 }, line: { width: 43, height: 1, backgroundColor: '#AA85CC' }, flower: { color: '#7042B8', fontSize: 18 },
+  local: { color: '#7042B8', fontSize: 9, fontWeight: '800', letterSpacing: 2.3, marginTop: 18 }, tagline: { color: '#665071', fontSize: 12, marginTop: 10, textAlign: 'center' },
+  loadingLabel: { color: '#665071', fontSize: 8, letterSpacing: 1.2, marginBottom: 10 },
+  loadingTrack: { width: 220, height: 4, borderRadius: 4, backgroundColor: '#D7C6E9', marginBottom: 25, overflow: 'hidden' }, loadingBar: { width: '100%', height: 4, borderRadius: 4, backgroundColor: '#7042B8' },
+  footer: { position: 'absolute', bottom: 45, alignItems: 'center', paddingHorizontal: 20 }, footerText: { color: '#7042B8', fontSize: 8, letterSpacing: 2, fontWeight: '700' }, delivery: { color: '#665071', fontSize: 10, marginTop: 8 },
 });

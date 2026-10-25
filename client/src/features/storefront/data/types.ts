@@ -23,7 +23,6 @@ export type Order = {
   paymentStatus?: string;
   id: string;
   date: string;
-  status: string;
   total: number;
   items: Array<{ id: string; name: string; quantity: number }>;
 };

@@ -13,5 +13,5 @@ export default function ProductPhoto({ product }: { product: Product }) {
 
 const styles = StyleSheet.create({
   frame: { width: '100%', height: '100%', backgroundColor: '#FFFFFF', alignItems: 'center', justifyContent: 'center', overflow: 'hidden', borderRadius: 10 },
-  image: { width: '100%', height: '100%' }, fallback: { fontSize: 10, color: '#697568', textAlign: 'center' },
+  image: { width: '100%', height: '100%' }, fallback: { fontSize: 10, color: '#806A57', textAlign: 'center' },
 });
