@@ -8,7 +8,7 @@ import { categories, getStore, money } from '../data/catalog';
 import type { Product, Tab } from '../data/types';
 import ProductPhoto from './ProductPhoto';
 
-type Props = { active: Tab; location: string; products: Product[]; onProduct: (product: Product) => void; cartCount: number; favorites: number; customerName?: string; onNavigate: (tab: Tab) => void; onSearch: (query: string) => void; onLocation: () => void; onAccount: () => void; onMenu: () => void; onLogout: () => void };
+type Props = { active: Tab; location: string; products: Product[]; onProduct: (product: Product) => void; cartCount: number; favorites: number; customerName?: string; onNavigate: (tab: Tab) => void; onSearch: (query: string) => void; onLocation: () => void; onAccount: () => void; onMenu: () => void };
 export default function WebStoreHeader(props: Props) {
   const { palette: p } = useStoreTheme();
   const [query, setQuery] = useState('');
@@ -44,7 +44,7 @@ export default function WebStoreHeader(props: Props) {
           <Pressable accessibilityRole="button" onPress={() => { setFocused(false); props.onSearch(query); }} style={[s.allResults, { borderTopColor: p.border }]}><Text style={[s.actionText, { color: p.primaryText }]}>See all results for “{query.trim()}” →</Text></Pressable>
         </View> : null}
       </View>
-      <View><Pressable accessibilityRole="button" onPress={props.onAccount} style={s.action}><Text style={[s.small, { color: p.muted }]}>{props.customerName ? 'Welcome back' : 'Welcome to NearBy'}</Text><Text style={[s.actionText, { color: p.primaryText }]}>{props.customerName || 'Sign in / Sign up'}</Text></Pressable>{props.customerName ? <Pressable accessibilityRole="button" onPress={props.onLogout} style={{ paddingVertical: 5 }}><Text style={[s.small, { color: p.terracotta }]}>Log out</Text></Pressable> : null}</View>
+      <View><Pressable accessibilityRole="button" onPress={props.onAccount} style={s.action}><Text style={[s.small, { color: p.muted }]}>{props.customerName ? 'Welcome back' : 'Welcome to NearBy'}</Text><Text style={[s.actionText, { color: p.primaryText }]}>{props.customerName || 'Sign in / Sign up'}</Text></Pressable></View>
       <Pressable accessibilityRole="button" accessibilityLabel={`Wishlist, ${props.favorites} items`} onPress={() => props.onNavigate('Favorites')} style={s.iconAction}><InterfaceIcon name="heart" size={22} color={p.primaryText} /><Text style={[s.small, { color: p.text }]}>Saved {props.favorites || ''}</Text></Pressable>
       <Pressable accessibilityRole="button" accessibilityLabel={`Cart, ${props.cartCount} items`} onPress={() => props.onNavigate('Cart')} style={[s.cart, { backgroundColor: p.soft }]}><InterfaceIcon name="bag" color={p.primaryText} /><Text style={[s.actionText, { color: p.primaryText }]}>Cart ({props.cartCount})</Text></Pressable>
     </View>

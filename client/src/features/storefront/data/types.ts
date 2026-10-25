@@ -1,6 +1,6 @@
-export type Category = 'Electronics' | 'Textiles' | 'Home Appliances' | 'Computer Items';
+export type Category = 'Electronics' | 'Textiles' | 'Home Appliances' | 'Computer Items' | 'Other';
 export type CategoryFilter = 'All' | Category;
-export type StoreId = 'all' | 'vv' | 'sr' | 'textiles';
+export type StoreId = 'all' | 'vv' | 'sr' | 'textiles' | 'catalogue';
 export type DeliveryLocation = 'Thodupuzha, Idukki' | 'Muttom, Idukki';
 export type Store = { id: StoreId; name: string; area: string; icon: string; category?: Category; location?: DeliveryLocation };
 export type Product = {
@@ -16,6 +16,9 @@ export type Product = {
   tag?: string;
   store: Exclude<StoreId, 'all'>;
   description?: string;
+  images?: string[];
+  sizes?: string[];
+  serverCategory?: string;
 };
 export type Order = {
   deliveryAddress?: { id: string; name: string; phone: string; address: string; pincode: string; location: DeliveryLocation };

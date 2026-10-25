@@ -23,7 +23,14 @@ export async function apiRequest(path: string, options: RequestInit = {}) {
   const timer = setTimeout(abort, 8000);
   try {
     const response = await fetch(`${getBaseURL()}${path}`, { ...options, signal: controller.signal });
-    if (!response.ok) throw new Error(`Server request failed (${response.status}).`);
+    if (!response.ok) {
+      let message = `Server request failed (${response.status}).`;
+      try {
+        const error: { message?: string; massage?: string } = await response.json();
+        message = error.message || error.massage || message;
+      } catch { /* A server error may be HTML rather than JSON. */ }
+      throw new Error(message);
+    }
     return response;
   } finally {
     clearTimeout(timer);

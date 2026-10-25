@@ -33,7 +33,7 @@ export default function PaymentSection({ subtotal, itemCount, location, address,
       <View style={styles.row}><Text style={styles.copy}>Subtotal</Text><Text style={styles.value}>{money(subtotal)}</Text></View>
       <View style={styles.row}><Text style={styles.copy}>Delivery</Text><Text style={styles.value}>{delivery ? money(delivery) : 'FREE'}</Text></View>
       <View style={styles.totalRow}><Text style={styles.total}>Total</Text><Text style={styles.total}>{money(subtotal + delivery)}</Text></View>
-      {!canOrder ? <Text style={styles.error}>Some cart items belong to another location. Return to the cart to remove them, or change location.</Text> : null}
+      {!canOrder ? <Text style={styles.error}>Online ordering and payment are not connected yet. Your saved cart will remain available.</Text> : null}
       <Pressable disabled={!canOrder || itemCount === 0 || !address} onPress={onConfirm} accessibilityRole="button" accessibilityState={{ disabled: !canOrder || itemCount === 0 || !address }} style={[styles.button, (!canOrder || itemCount === 0 || !address) && { opacity: 0.5 }]}><Text style={styles.buttonText}>Confirm demo order · {money(subtotal + delivery)}</Text></Pressable>
       <Text style={styles.note}>Demo payment only. No card details or UPI authorisation are collected.</Text>
     </View>

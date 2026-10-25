@@ -23,6 +23,9 @@
     },
     "plugins": [
       "expo-router",
+      "expo-secure-store",
+      ["@clerk/expo", { "appleSignIn": false }],
+      "@clerk/expo-native-components/app.plugin.js",
       [
         "expo-splash-screen",
         {
