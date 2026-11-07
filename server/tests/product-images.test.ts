@@ -1,0 +1,12 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {imagePlan} from '../lib/productImages.js';
+const file={size:100,buffer:Buffer.from('test')};
+test('accepts five new product images',()=>{assert.equal(imagePlan({},Array(5).fill(file)).order.length,5);});
+test('rejects a sixth image before uploading',()=>{assert.throws(()=>imagePlan({},Array(6).fill(file)),/between 1 and 5/);});
+test('counts retained and new photos together',()=>{const urls=['https://example.invalid/a','https://example.invalid/b'];assert.throws(()=>imagePlan({existingImages:urls},Array(4).fill(file),urls),/between 1 and 5/);});
+test('requires at least one image',()=>{assert.throws(()=>imagePlan({},[]),/between 1 and 5/);});
+test('does not retain an image from another product',()=>{assert.throws(()=>imagePlan({existingImages:'https://example.invalid/other'},[],['https://example.invalid/own']),/already belonging/);});
+test('retains cover order including a newly uploaded cover',()=>{const url='https://example.invalid/old';const order=['new:1',url,'new:0'];assert.deepEqual(imagePlan({existingImages:url,imageOrder:JSON.stringify(order)},[file,file],[url]).order,order);});
+test('rejects duplicate or omitted image order entries',()=>{assert.throws(()=>imagePlan({imageOrder:'["new:0","new:0"]'},[file,file]),/Invalid image order/);assert.throws(()=>imagePlan({imageOrder:'[]'},[file]),/Invalid image order/);});
+test('limits combined new upload size for hosted requests',()=>{assert.throws(()=>imagePlan({},[{...file,size:2*1024*1024},{...file,size:2*1024*1024}]),/3 MB in total/);});

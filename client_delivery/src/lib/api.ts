@@ -23,7 +23,11 @@ export async function apiRequest(path: string, options: RequestInit = {}) {
   const timer = setTimeout(abort, 8000);
   try {
     const response = await fetch(`${getBaseURL()}${path}`, { ...options, signal: controller.signal });
-    if (!response.ok) throw new Error(`Server request failed (${response.status}).`);
+    if (!response.ok) {
+      let message = response.status === 401 ? 'The server could not verify your session. Sign in again.' : response.status === 403 ? 'This account is not allowed to access these records.' : `Server request failed (${response.status}).`;
+      try { const body = await response.json(); if (typeof body.message === 'string') message = body.message; } catch {}
+      throw new Error(message);
+    }
     return response;
   } finally {
     clearTimeout(timer);

@@ -1,9 +1,13 @@
+import { useMemo } from 'react';
 import { useEffect, useState, type PropsWithChildren } from 'react';
 import { AppState, Pressable, StyleSheet, Text, View } from 'react-native';
 import { checkServer } from '../lib/api';
+import { useAppTheme, type ThemePalette } from '../AppearanceContext';
 
 type Connection = 'checking' | 'connected' | 'offline';
 export function ServerConnection({ children }: PropsWithChildren) {
+  const { colors: C } = useAppTheme(); const styles = useMemo(() => createStyles(C), [C]);
+
   const [status, setStatus] = useState<Connection>('checking');
   const [attempt, setAttempt] = useState(0);
   useEffect(() => {
@@ -22,7 +26,7 @@ export function ServerConnection({ children }: PropsWithChildren) {
     const listener = AppState.addEventListener('change', state => { if (state === 'active') void refresh(); });
     return () => { active = false; controller?.abort(); clearInterval(timer); listener.remove(); };
   }, [attempt]);
-  const label = status === 'connected' ? 'Server connected · Preview data' : status === 'checking' ? 'Connecting to server…' : 'Server unavailable · Preview data';
+  const label = status === 'connected' ? 'Server reachable · Order access checked separately' : status === 'checking' ? 'Connecting to server…' : 'Server unavailable';
   return <View style={styles.root}>
     <View style={styles.content}>{children}</View>
     <View style={styles.bar}>
@@ -31,12 +35,12 @@ export function ServerConnection({ children }: PropsWithChildren) {
     </View>
   </View>;
 }
-const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: '#FFFCF4' },
+const createStyles = (C: ThemePalette) => StyleSheet.create({
+  root: { flex: 1, backgroundColor: C.surface },
   content: { flex: 1 },
-  bar: { minHeight: 32, paddingHorizontal: 16, paddingVertical: 6, borderTopWidth: 1, borderTopColor: '#DBCEAD', flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 12, flexWrap: 'wrap' },
-  label: { color: '#174E3C', fontSize: 10, lineHeight: 16, textAlign: 'center' },
-  offline: { color: '#A95237' },
+  bar: { minHeight: 32, paddingHorizontal: 16, paddingVertical: 6, borderTopWidth: 1, borderTopColor: C.border, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 12, flexWrap: 'wrap' },
+  label: { color: C.primaryText, fontSize: 10, lineHeight: 16, textAlign: 'center' },
+  offline: { color: C.red },
   retry: { minHeight: 32, paddingHorizontal: 10, justifyContent: 'center' },
-  retryText: { color: '#174E3C', fontSize: 11, fontWeight: '700' },
+  retryText: { color: C.primaryText, fontSize: 11, fontWeight: '700' },
 });

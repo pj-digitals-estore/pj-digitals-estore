@@ -10,10 +10,6 @@ export const getAddress = async (req: Request, res: Response) => {
       createdAt: -1,
     });
     res.json({ success: true, data: address });
-    if (!address) {
-      return res.status(404).json({ message: "Address not found" });
-    }
-    res.json(address);
   } catch (error) {
     res.status(500).json({ message: "Error fetching address" });
   }
@@ -81,7 +77,7 @@ export const updateAddress = async (req: Request, res: Response) => {
         zipCode,
         isDefault,
       },
-      { new: true },
+      { returnDocument: 'after' },
     );
 
     // await newAddress.save();
@@ -114,7 +110,7 @@ export const deleteAddress = async (req: Request, res: Response) => {
     await address.deleteOne();
 
     // await newAddress.save();
-    res.json({ message: "address removed" }); 
+    res.json({ success: true, message: "Address removed" });
   } catch (error) {
     res.status(500).json({ message: "Error adding address" });
   }

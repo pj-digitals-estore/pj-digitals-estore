@@ -20,7 +20,7 @@ CartRouter.post("/add", protect, addToCart);
 CartRouter.put("/item/:productId", protect, updateCartItems);
 
 // remove cart item quantity
-CartRouter.delete("/item/:productId", removeCartItem);
+CartRouter.delete("/item/:productId", protect, removeCartItem);
 
 // clear cart
 CartRouter.delete("/", protect, clearCart);

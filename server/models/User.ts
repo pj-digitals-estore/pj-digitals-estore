@@ -7,7 +7,7 @@ const userSchema = new mongoose.Schema<IUser>(
     email: { type: String, trim: true, unique: true },
     clerkId: { type: String, sparse: true, unique: true },
     image: { type: String },
-    role: { type: String, enum: ["user", "admin"], default: "user" },
+    role: { type: String, enum: ["user", "admin", "shop"], default: "user" },
   },
   { timestamps: true },
 );

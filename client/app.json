@@ -12,7 +12,7 @@
     },
     "android": {
       "adaptiveIcon": {
-        "backgroundColor": "#EEE5F8",
+        "backgroundColor": "#171C32",
         "foregroundImage": "./assets/images/Neon Purple Marketplace Delivery Icon.png"
       },
       "predictiveBackGestureEnabled": false
@@ -29,7 +29,7 @@
       [
         "expo-splash-screen",
         {
-          "backgroundColor": "#EEE5F8",
+          "backgroundColor": "#171C32",
           "image": "./assets/images/Neon Purple Marketplace Delivery Icon.png",
           "imageWidth": 76
         }

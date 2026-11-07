@@ -23,7 +23,7 @@ const cartSchema = new Schema<ICart>(
     items: [cartItemSchema],
     totalAmount: { type: Number, default: 0 },
   },
-  { timestamps: true },
+  { timestamps: true, optimisticConcurrency: true },
 );
 
 cartSchema.methods.calculateTotal = function (this: ICart) {

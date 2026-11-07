@@ -1,7 +1,7 @@
 import Constants from 'expo-constants';
 import { Platform } from 'react-native';
 
-function getBaseURL() {
+export function getBaseURL() {
   const configured = process.env.EXPO_PUBLIC_API_URL?.trim();
   if (configured) {
     const url = new URL(configured);
@@ -14,13 +14,13 @@ function getBaseURL() {
   return `http://${host || (Platform.OS === 'android' ? '10.0.2.2' : 'localhost')}:3000`;
 }
 
-export async function apiRequest(path: string, options: RequestInit = {}) {
+export async function apiRequest(path: string, options: RequestInit & { timeoutMs?: number } = {}) {
   if (!path.startsWith('/') || path.startsWith('//')) throw new Error('Use a server-relative API path.');
   const controller = new AbortController();
   const abort = () => controller.abort();
   options.signal?.addEventListener('abort', abort);
   if (options.signal?.aborted) controller.abort();
-  const timer = setTimeout(abort, 8000);
+  const timer = setTimeout(abort, options.timeoutMs ?? 15000);
   try {
     const response = await fetch(`${getBaseURL()}${path}`, { ...options, signal: controller.signal });
     if (!response.ok) {

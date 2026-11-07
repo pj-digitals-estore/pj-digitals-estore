@@ -4,38 +4,41 @@ import { useStoreTheme } from '../ThemeContext';
 import { money, type Palette } from '../data/catalog';
 import type { DeliveryAddress } from './AddressBook';
 
-export type PaymentMethod = 'UPI' | 'Card';
+export type PaymentMethod = 'UPI' | 'Card' | 'Cash on Delivery';
 const methods: { name: PaymentMethod; icon: string; description: string }[] = [
   { name: 'UPI', icon: '↗', description: 'Google Pay, PhonePe or another UPI app' },
   { name: 'Card', icon: '▣', description: 'Credit or debit card' },
+  { name: 'Cash on Delivery', icon: '₹', description: 'Pay cash when your order arrives' },
 ];
 
-export default function PaymentSection({ subtotal, itemCount, location, address, onManageAddress, method, onChange, onBack, onConfirm, canOrder }: { subtotal: number; itemCount: number; location: string; address?: DeliveryAddress; onManageAddress: () => void; method: PaymentMethod; onChange: (method: PaymentMethod) => void; onBack: () => void; onConfirm: () => void; canOrder: boolean }) {
+export default function PaymentSection({ subtotal, itemCount, location, address, onManageAddress, method, onChange, onBack, onConfirm, canOrder, live = false, busy = false, paymentMode }: { subtotal: number; itemCount: number; location: string; address?: DeliveryAddress; onManageAddress: () => void; method: PaymentMethod; onChange: (method: PaymentMethod) => void; onBack: () => void; onConfirm: () => void; canOrder: boolean; live?: boolean; busy?: boolean; paymentMode?: string }) {
   const { palette } = useStoreTheme();
   const styles = createStyles(palette);
+  const cash = method === 'Cash on Delivery';
   const delivery = subtotal >= 999 ? 0 : 99;
   return <View>
     <Pressable onPress={onBack} accessibilityRole="button" style={styles.back}><Text style={styles.backText}>← Back to cart</Text></Pressable>
     <Text style={styles.title}>Payment</Text><Text style={styles.subtitle}>Choose how you would like to pay.</Text>
-    <View style={styles.demo}><Text style={styles.demoTitle}>DEMO CHECKOUT</Text><Text style={styles.copy}>No money will be charged. Online payment options are previews.</Text></View>
+    <View style={styles.demo}><Text style={styles.demoTitle}>{live && cash ? 'CASH ON DELIVERY' : live ? (paymentMode === 'live' ? 'LIVE CHECKOUT' : 'TEST CHECKOUT') : 'DEMO CHECKOUT'}</Text><Text style={styles.copy}>{live ? cash ? 'Pay cash on delivery. No online payment window will open.' : 'Online payment opens securely on Razorpay. Payment is confirmed by the server.' : 'No money will be charged. Online payment options are previews.'}</Text></View>
     <Text style={styles.label}>DELIVERING TO</Text><Text style={styles.location}>{location}</Text>
 
     {address ? <><Text style={styles.methodName}>{address.name}</Text><Text style={styles.copy}>{address.address} · {address.pincode}</Text><Text style={styles.copy}>{address.phone}</Text></> : <Text style={styles.copy}>Add a delivery address to continue.</Text>}
     <Pressable onPress={onManageAddress} accessibilityRole="button" style={styles.back}><Text style={styles.backText}>{address ? 'Change address →' : 'Add address →'}</Text></Pressable>
     <Text style={styles.label}>PAYMENT METHOD</Text>
-    {methods.map((option) => <Pressable key={option.name} onPress={() => onChange(option.name)} style={[styles.method, method === option.name && styles.selected]} accessibilityRole="radio" accessibilityState={{ checked: method === option.name }}>
+    {methods.map((option) => <Pressable key={option.name} disabled={busy} onPress={() => onChange(option.name)} style={[styles.method, method === option.name && styles.selected]} accessibilityRole="radio" accessibilityState={{ checked: method === option.name, disabled: busy }}>
       <View style={styles.icon}><Text style={styles.iconText}>{option.icon}</Text></View>
       <View style={styles.methodCopy}><Text style={styles.methodName}>{option.name}</Text><Text style={styles.copy}>{option.description}</Text></View>
       <Text style={styles.radio}>{method === option.name ? '●' : '○'}</Text>
     </Pressable>)}
+    {live && !cash ? <Text style={styles.copy}>Choose your final UPI or card option on the secure Razorpay page.</Text> : null}
     <View style={styles.summary}>
       <Text style={styles.summaryTitle}>Order summary · {itemCount} {itemCount === 1 ? 'item' : 'items'}</Text>
       <View style={styles.row}><Text style={styles.copy}>Subtotal</Text><Text style={styles.value}>{money(subtotal)}</Text></View>
       <View style={styles.row}><Text style={styles.copy}>Delivery</Text><Text style={styles.value}>{delivery ? money(delivery) : 'FREE'}</Text></View>
       <View style={styles.totalRow}><Text style={styles.total}>Total</Text><Text style={styles.total}>{money(subtotal + delivery)}</Text></View>
-      {!canOrder ? <Text style={styles.error}>Online ordering and payment are not connected yet. Your saved cart will remain available.</Text> : null}
-      <Pressable disabled={!canOrder || itemCount === 0 || !address} onPress={onConfirm} accessibilityRole="button" accessibilityState={{ disabled: !canOrder || itemCount === 0 || !address }} style={[styles.button, (!canOrder || itemCount === 0 || !address) && { opacity: 0.5 }]}><Text style={styles.buttonText}>Confirm demo order · {money(subtotal + delivery)}</Text></Pressable>
-      <Text style={styles.note}>Demo payment only. No card details or UPI authorisation are collected.</Text>
+      {!canOrder ? <Text style={styles.error}>{cash ? 'Wait for your signed-in cart to sync before placing your order.' : live ? 'Online checkout is not enabled on the server yet. Your cart is saved.' : 'Ordering is not connected yet. Your saved cart will remain available.'}</Text> : null}
+      <Pressable disabled={busy || !canOrder || itemCount === 0 || !address} onPress={onConfirm} accessibilityRole="button" accessibilityState={{ disabled: busy || !canOrder || itemCount === 0 || !address }} style={[styles.button, (busy || !canOrder || itemCount === 0 || !address) && { opacity: 0.5 }]}><Text style={styles.buttonText}>{busy ? cash ? 'Placing order…' : 'Preparing checkout…' : cash ? 'Place Cash on Delivery order' : live ? 'Continue to secure payment' : 'Confirm demo order'} · {money(subtotal + delivery)}</Text></Pressable>
+      <Text style={styles.note}>{cash ? 'Pay only the total confirmed in your order when it is delivered. Your order is placed only after server confirmation.' : live ? 'The final amount is calculated by the server. Check it on Razorpay before paying.' : 'Demo payment only. No card details or UPI authorisation are collected.'}</Text>
     </View>
   </View>;
 }

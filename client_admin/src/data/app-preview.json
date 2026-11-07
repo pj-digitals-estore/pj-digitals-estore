@@ -1,0 +1,210 @@
+{
+  "generatedAt": "2026-11-06T07:36:45.302Z",
+  "source": "App source samples; not live sessions or database records",
+  "shops": [
+    {
+      "id": "vv",
+      "name": "VV Electricals",
+      "area": "Thodupuzha · Electronics",
+      "icon": "✳",
+      "category": "Electronics",
+      "location": "Thodupuzha, Idukki"
+    },
+    {
+      "id": "sr",
+      "name": "SR Electrics",
+      "area": "Muttom · Electronics",
+      "icon": "ϟ",
+      "category": "Electronics",
+      "location": "Muttom, Idukki"
+    },
+    {
+      "id": "textiles",
+      "name": "Thodupuzha Textiles",
+      "area": "Thodupuzha · Textiles & clothing",
+      "icon": "▤",
+      "category": "Textiles",
+      "location": "Thodupuzha, Idukki"
+    }
+  ],
+  "products": [
+    {
+      "id": "p1",
+      "name": "Wireless Headphones",
+      "category": "Electronics",
+      "sku": "AUD-014",
+      "price": 2499,
+      "stock": 12,
+      "reorderLevel": 5,
+      "location": "Audio shelf A1"
+    },
+    {
+      "id": "p2",
+      "name": "Mechanical Keyboard",
+      "category": "Computer Items",
+      "sku": "CMP-022",
+      "price": 3499,
+      "stock": 4,
+      "reorderLevel": 6,
+      "location": "Computer shelf B2"
+    },
+    {
+      "id": "p3",
+      "name": "USB-C Hub 8-in-1",
+      "category": "Computer Items",
+      "sku": "ACC-008",
+      "price": 1799,
+      "stock": 2,
+      "reorderLevel": 5,
+      "location": "Accessories shelf C1"
+    },
+    {
+      "id": "p4",
+      "name": "Portable SSD 1TB",
+      "category": "Computer Items",
+      "sku": "STR-031",
+      "price": 6999,
+      "stock": 18,
+      "reorderLevel": 5,
+      "location": "Storage shelf A3"
+    },
+    {
+      "id": "p5",
+      "name": "Wireless Mouse",
+      "category": "Computer Items",
+      "sku": "CMP-006",
+      "price": 899,
+      "stock": 7,
+      "reorderLevel": 5,
+      "location": "Computer shelf B2"
+    },
+    {
+      "id": "p6",
+      "name": "Webcam 4K",
+      "category": "Electronics",
+      "sku": "ACC-019",
+      "price": 4999,
+      "stock": 0,
+      "reorderLevel": 4,
+      "location": "Accessories shelf C2"
+    }
+  ],
+  "orders": [
+    {
+      "id": "TDP-1048",
+      "customer": "Anu Mathew",
+      "items": 2,
+      "total": 3298,
+      "status": "New",
+      "time": "9:42 AM"
+    },
+    {
+      "id": "TDP-1047",
+      "customer": "Rahul Thomas",
+      "items": 1,
+      "total": 3499,
+      "status": "Preparing",
+      "time": "9:18 AM"
+    },
+    {
+      "id": "TDP-1046",
+      "customer": "Meera Joseph",
+      "items": 3,
+      "total": 5797,
+      "status": "Ready",
+      "time": "8:56 AM"
+    },
+    {
+      "id": "TDP-1045",
+      "customer": "Nikhil S",
+      "items": 1,
+      "total": 899,
+      "status": "Completed",
+      "time": "8:32 AM"
+    }
+  ],
+  "shopDeliveries": [
+    {
+      "id": "DL-7781",
+      "orderId": "TDP-1046",
+      "customer": "Meera Joseph",
+      "address": "Rose Villa, near St. Mary’s Church, Muttom",
+      "items": 3,
+      "total": 5797,
+      "status": "Out for delivery",
+      "driver": "Arun R.",
+      "window": "Today · 2:00–4:00 PM"
+    },
+    {
+      "id": "DL-7780",
+      "orderId": "TDP-1045",
+      "customer": "Nikhil S",
+      "address": "Market Road, Thodupuzha",
+      "items": 1,
+      "total": 899,
+      "status": "Delivered",
+      "driver": "Jomon P.",
+      "window": "Delivered today · 10:14 AM"
+    },
+    {
+      "id": "DL-7779",
+      "orderId": "TDP-1043",
+      "customer": "Akhil Thomas",
+      "address": "Green Park Apartments, Thodupuzha",
+      "items": 2,
+      "total": 3298,
+      "status": "In transit",
+      "driver": "Anoop M.",
+      "window": "Today · 3:00–5:00 PM"
+    },
+    {
+      "id": "DL-7778",
+      "orderId": "TDP-1042",
+      "customer": "Diya Paul",
+      "address": "College Road, Thodupuzha",
+      "items": 1,
+      "total": 2499,
+      "status": "Preparing",
+      "driver": "Assigning driver",
+      "window": "Today · 4:00–6:00 PM"
+    }
+  ],
+  "deliveries": [
+    {
+      "id": "TDP-1046",
+      "customer": "Meera Joseph",
+      "phone": "+91 ••••• 4821",
+      "shop": "SR Electrics",
+      "address": "Rose Villa, near St. Mary’s Church",
+      "area": "Muttom",
+      "items": 2,
+      "amount": 2499,
+      "state": "On the way",
+      "eta": "12 min"
+    },
+    {
+      "id": "TDP-1043",
+      "customer": "Akhil Thomas",
+      "phone": "+91 ••••• 9304",
+      "shop": "Thodupuzha Textiles",
+      "address": "Green Park Apartments, Block B",
+      "area": "Thodupuzha",
+      "items": 1,
+      "amount": 1899,
+      "state": "Assigned",
+      "eta": "25 min"
+    },
+    {
+      "id": "TDP-1041",
+      "customer": "Nina Paul",
+      "phone": "+91 ••••• 1176",
+      "shop": "VV Electricals",
+      "address": "Market Road, opposite bus stand",
+      "area": "Thodupuzha",
+      "items": 3,
+      "amount": 3248,
+      "state": "Picked up",
+      "eta": "18 min"
+    }
+  ]
+}

@@ -2,13 +2,15 @@ import { useState } from 'react';
 import { Image, Modal, Pressable, ScrollView, Text, TextInput, View } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Button, C, Card, Page, S, Section } from '../components/ShopUI';
+import { Button, Card, Page, Section, useShopStyles } from '../components/ShopUI';
 import { useShopAuth } from '../context/ShopAuthContext';
 
 type Advertisement = { id: string; title: string; offer: string; description: string; image: string; enabled: boolean };
 const blank = { title: '', offer: '', description: '', image: '' };
 
 export default function AdvertisementsScreen() {
+  const { C, S } = useShopStyles();
+
   const { account } = useShopAuth();
   const [ads, setAds] = useState<Advertisement[]>([]);
   const [form, setForm] = useState(blank);
@@ -59,9 +61,11 @@ export default function AdvertisementsScreen() {
 }
 
 function Banner({ title, offer, description, image, shopName }: typeof blank & { shopName: string }) {
+  const { C, S } = useShopStyles();
+
   const [failedImage, setFailedImage] = useState('');
-  return <View style={{ backgroundColor: C.blue, borderRadius: 14, overflow: 'hidden', borderBottomWidth: 4, borderColor: '#CFAC65' }}>
+  return <View style={{ backgroundColor: C.blue, borderRadius: 14, overflow: 'hidden', borderBottomWidth: 4, borderColor: C.border }}>
     {image.startsWith('https://') && failedImage !== image ? <Image accessibilityLabel="Advertisement image" source={{ uri: image }} style={{ width: '100%', height: 145 }} resizeMode="cover" onError={() => setFailedImage(image)} /> : null}
-    <View style={{ padding: 22 }}><Text style={S.eyebrow}>{shopName.toUpperCase()}</Text><Text style={S.bannerTitle}>{title || 'Your promotion title'}</Text><Text style={{ color: '#E1C68A', fontSize: 24, fontWeight: '800', marginTop: 12 }}>{offer || 'Your special offer'}</Text>{description ? <Text style={S.bannerCopy}>{description}</Text> : null}</View>
+    <View style={{ padding: 22 }}><Text style={S.eyebrow}>{shopName.toUpperCase()}</Text><Text style={S.bannerTitle}>{title || 'Your promotion title'}</Text><Text style={{ color: '#D7C9FF', fontSize: 24, fontWeight: '800', marginTop: 12 }}>{offer || 'Your special offer'}</Text>{description ? <Text style={S.bannerCopy}>{description}</Text> : null}</View>
   </View>;
 }

@@ -6,7 +6,12 @@
   "scripts": {
     "start": "tsx server.ts",
     "server": "nodemon --exec tsx server.ts",
-    "build": "tsc"
+    "build": "tsc",
+    "test:trial": "node --import tsx --test tests/trial.test.ts tests/product-images.test.ts",
+    "test:transactions": "node --import tsx --test tests/transactions.test.ts",
+    "approve:shop": "tsx scripts/approveShop.ts",
+    "reconcile:payments": "tsx scripts/reconcilePayments.ts",
+    "prepare:trial": "tsx scripts/prepareTrial.ts"
   },
   "keywords": [],
   "author": "",
@@ -34,6 +39,7 @@
     "@types/express": "^5.0.6",
     "@types/multer": "^2.3.0",
     "@types/node": "^26.6.5",
+    "mongodb-memory-server": "^11.3.0",
     "nodemon": "^3.1.14",
     "ts-node": "^10.9.2",
     "tsx": "^4.23.15",

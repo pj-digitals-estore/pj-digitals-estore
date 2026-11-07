@@ -29,6 +29,7 @@ export interface ICart extends Document {
 }
 
 export interface IOrderItem {
+    shop: Types.ObjectId;
     product: Types.ObjectId;
     name: string;
     quantity: number;
@@ -38,19 +39,29 @@ export interface IOrderItem {
 
 export interface IOrder extends Document {
     user: Types.ObjectId;
+    checkoutKey?: string;
+    cartFingerprint?: string;
+    checkoutTokenHash?: string;
+    razorpayOrderId?: string;
+    paymentSetupUntil?: Date;
+    paymentSetupLock?: string;
+    paidAt?: Date;
+    manualReview?: boolean;
     orderNumber: string;
     items: IOrderItem[];
     shippingAddress: {
+        name: string;
+        phone: string;
         street: string;
         city: string;
         state: string;
         zipCode: string;
         country: string;
     };
-    paymentMethod: "cash" | "stripe";
+    paymentMethod: "razorpay";
     paymentStatus: "pending" | "paid" | "failed" | "refunded";
     paymentIntentId?: string;
-    orderStatus: "placed" | "processing" | "shipped" | "delivered" | "cancelled";
+    orderStatus: "awaiting_payment" | "placed" | "processing" | "shipping" | "delivered" | "cancelled";
     subtotal: number;
     shippingCost: number;
     tax: number;
@@ -62,13 +73,17 @@ export interface IOrder extends Document {
 }
 
 export interface IProduct extends Document {
+    shop?: Types.ObjectId;
+    sku?: string;
+    reorderLevel?: number;
+    location?: string;
     name: string;
     description: string;
     price: number;
     comparePrice?: number;
     images: string[];
     sizes: string[];
-    category: "Mobile" | "Laptop" | "TV" | "Printer" | "Electronics" | "Other";
+    category: "Mobile" | "Tablet" | "Laptop" | "TV" | "Printer" | "Accessories" | "Electronics" | "Textiles" | "Home Appliances" | "Computer Items" | "Other";
     stock: number;
     ratings: {
         average: number;
@@ -85,7 +100,7 @@ export interface IUser extends Document {
     email: string;
     clerkId: string;
     image?: string;
-    role: "user" | "admin";
+    role: "user" | "admin" | "shop";
     createdAt: Date;
     updatedAt: Date;
 }

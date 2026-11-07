@@ -12,7 +12,7 @@ export const getDashboardStats = async (req: Request, res: Response) => {
     const totalProducts = await Product.countDocuments();
     const totalOrders = await Order.countDocuments();
 
-    const validOrders = await Order.find({ orderStatus: { $ne: "cancelled" } });
+    const validOrders = await Order.find({ paymentStatus: "paid", orderStatus: { $ne: "cancelled" } });
     const totalRevenue = validOrders.reduce(
       (sum, order) => sum + order.totalAmount,
       0,

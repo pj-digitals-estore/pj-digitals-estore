@@ -19,7 +19,7 @@ function ShopTile({ shop, index, count, width, onSelect }: { shop: Store; index:
       <Pressable onPress={() => onSelect(shop.id)} onPressIn={() => press(0.98)} onPressOut={() => press(1)} accessibilityRole="button" accessibilityLabel={`Browse ${shop.name}, ${count} products`} style={styles.button}>
         <View style={styles.top}><View style={[styles.icon, index === 1 && styles.goldIcon]}><Text style={styles.symbol}>{shop.icon}</Text></View><Text style={styles.arrow}>↗</Text></View>
         <Text style={styles.name}>{shop.name}</Text>
-        <Text style={styles.category}>{shop.id === 'textiles' ? 'Textiles & clothing' : 'Electronics'}</Text>
+        <Text style={styles.category}>{shop.category || 'Local shop'}</Text>
         <View style={styles.bottom}><View style={styles.dot} /><Text style={styles.count}>{count} items to explore</Text></View>
       </Pressable>
     </Animated.View>
@@ -77,7 +77,7 @@ const createStyles = (colors: Palette) => StyleSheet.create({
   heading: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 7, marginBottom: 14, gap: 8 },
   title: { color: colors.text, fontSize: 19, fontWeight: '800', flexShrink: 1 }, total: { color: colors.muted, fontSize: 8, fontWeight: '800', letterSpacing: 1 },
   viewport: { overflow: 'hidden', paddingVertical: 10 }, track: { flexDirection: 'row' }, group: { flexDirection: 'row', gap: 12, paddingRight: 12 }, staticGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 12 },
-  tile: { boxShadow: '0px 4px 10px rgba(64, 35, 94, 0.12)', width: 230, flexShrink: 0, borderRadius: 18, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border, overflow: 'hidden' },
+  tile: { boxShadow: '0px 4px 10px rgba(142, 108, 255, 0.16)', width: 230, flexShrink: 0, borderRadius: 18, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border, overflow: 'hidden' },
   button: { padding: 17 }, top: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   icon: { width: 45, height: 45, borderRadius: 14, backgroundColor: colors.soft, alignItems: 'center', justifyContent: 'center' }, goldIcon: { backgroundColor: colors.tint },
   symbol: { color: colors.primaryText, fontSize: 25 }, arrow: { color: colors.gold, fontSize: 22 },

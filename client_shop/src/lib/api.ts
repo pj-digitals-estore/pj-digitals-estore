@@ -1,6 +1,13 @@
 import Constants from 'expo-constants';
 import { Platform } from 'react-native';
 
+export class ApiError extends Error {
+  constructor(public status: number, public path: string, message: string) {
+    super(message);
+    this.name = 'ApiError';
+  }
+}
+
 function getBaseURL() {
   const configured = process.env.EXPO_PUBLIC_API_URL?.trim();
   if (configured) {
@@ -14,16 +21,20 @@ function getBaseURL() {
   return `http://${host || (Platform.OS === 'android' ? '10.0.2.2' : 'localhost')}:3000`;
 }
 
-export async function apiRequest(path: string, options: RequestInit = {}) {
+export async function apiRequest(path: string, options: RequestInit & { timeoutMs?: number } = {}) {
   if (!path.startsWith('/') || path.startsWith('//')) throw new Error('Use a server-relative API path.');
   const controller = new AbortController();
   const abort = () => controller.abort();
   options.signal?.addEventListener('abort', abort);
   if (options.signal?.aborted) controller.abort();
-  const timer = setTimeout(abort, 8000);
+  const timer = setTimeout(abort, options.timeoutMs ?? 15000);
   try {
     const response = await fetch(`${getBaseURL()}${path}`, { ...options, signal: controller.signal });
-    if (!response.ok) throw new Error(`Server request failed (${response.status}).`);
+    if (!response.ok) {
+      let message = `Server request failed (${response.status}).`;
+      try { const body = await response.json(); if (typeof body.message === 'string') message = body.message; } catch {}
+      throw new ApiError(response.status, path, message);
+    }
     return response;
   } finally {
     clearTimeout(timer);

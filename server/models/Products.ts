@@ -3,6 +3,10 @@ import { IProduct } from "../types/index.js";
 
 const productSchema = new Schema<IProduct>(
   {
+    shop: { type: mongoose.Schema.Types.ObjectId, ref: 'Shop', index: true },
+    sku: { type: String, trim: true },
+    reorderLevel: { type: Number, default: 5, min: 0 },
+    location: { type: String, default: 'Main shelf' },
     name: { type: String, required: true, trim: true },
     description: { type: String, required: true },
     price: { type: Number, required: true, min: 0 },
@@ -17,7 +21,7 @@ const productSchema = new Schema<IProduct>(
         "Laptop",
         "Accessories",
         "Electronics",
-        "Other",
+        "Other", "Textiles", "Home Appliances", "Computer Items",
       ],
       default: "Other",
     },

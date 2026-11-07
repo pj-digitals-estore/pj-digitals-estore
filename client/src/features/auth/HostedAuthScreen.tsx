@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { useHostedAuth } from '@clerk/expo/hosted-auth';
 import { useSession } from '@clerk/expo';
+import { hostedAuthErrorMessage, hostedAuthOptions, hostedAuthResultMessage } from '../../lib/hostedAuth';
 import { router, useLocalSearchParams } from 'expo-router';
 import { ActivityIndicator, Pressable, Text, View } from 'react-native';
 import { useStoreTheme } from '@/features/storefront/ThemeContext';
@@ -29,20 +30,19 @@ export default function HostedAuthScreen({ mode }: { mode: 'login' | 'signup' })
     pending.current = true; setBusy(true); setMessage('');
     beginHostedAuthFlow(checkout);
     try {
-      const result = await startHostedAuth({ mode: mode === 'signup' ? 'sign-up' : 'sign-in' });
-      const error = result.createdSessionId ? '' : result.authSessionResult?.type === 'cancel' || result.authSessionResult?.type === 'dismiss'
-        ? 'Sign-in was cancelled. You can try again when ready.' : 'Sign-in did not finish. Please try again.';
+      const result = await startHostedAuth(hostedAuthOptions(mode === 'signup' ? 'sign-up' : 'sign-in'));
+      const error = hostedAuthResultMessage(result);
       finishHostedAuthFlow(error);
       if (mounted.current && error) setMessage(error);
     } catch (cause) {
-      const error = cause instanceof Error ? cause.message : 'Unable to open secure sign-in. Please try again.';
+      const error = hostedAuthErrorMessage(cause);
       finishHostedAuthFlow(error);
       if (mounted.current) setMessage(error);
     } finally { pending.current = false; if (mounted.current) setBusy(false); }
   }
 
   const launch = useRef(openClerk);
-  launch.current = openClerk;
+  useEffect(() => { launch.current = openClerk; });
   useEffect(() => {
     if (!ready || session?.status === 'active' || opened.current) return;
     opened.current = true;

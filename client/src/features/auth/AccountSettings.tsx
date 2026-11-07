@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import Constants from 'expo-constants';
+import { isExpoGo } from '../../lib/hostedAuth';
 import { router } from 'expo-router';
 import { AppState, Image, Modal, Pressable, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -9,7 +9,7 @@ import { useCustomerAuth } from './CustomerAuthContext';
 import { useStoreTheme } from '@/features/storefront/ThemeContext';
 
 const NativeProfile: typeof import('@clerk/expo/native-components').UserProfileView | null =
-  Constants.executionEnvironment === 'storeClient' ? null : require('@clerk/expo/native-components').UserProfileView;
+  isExpoGo() ? null : require('@clerk/expo/native-components').UserProfileView;
 
 export default function AccountSettings() {
   const { user } = useUser();

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { useCustomerAuth } from '@/features/auth/CustomerAuthContext';
 import { createCartApi, type UserCart } from '@/services/cart';
 import type { Product } from '../data/types';
@@ -9,11 +9,13 @@ const lineKey = (id: string, size?: string) => `${id}:${size || ''}`;
 export function useCustomerCart(products: Product[]) {
   const { customer, ready, getToken } = useCustomerAuth();
   const owner = customer?.id ?? null;
-  const currentOwner = useRef(owner); currentOwner.current = owner;
+  const currentOwner = useRef(owner);
+  useLayoutEffect(() => { currentOwner.current = owner; }, [owner]);
   const api = useMemo(() => createCartApi(getToken), [getToken]);
-  const apiRef = useRef(api); apiRef.current = api;
+  const apiRef = useRef(api);
+  useLayoutEffect(() => { apiRef.current = api; }, [api]);
   const [guest, setGuest] = useState<BasketLine[]>([]);
-  const guestRef = useRef(guest); guestRef.current = guest;
+  const guestRef = useRef<BasketLine[]>([]);
   const updateGuest = useCallback((update: (items: BasketLine[]) => BasketLine[]) => {
     const next = update(guestRef.current); guestRef.current = next; setGuest(next);
   }, []);
@@ -28,12 +30,15 @@ export function useCustomerCart(products: Product[]) {
 
   useEffect(() => {
     if (!ready) return;
-    setError(''); setLoadedOwner(null); setSaved(null);
-    if (!owner) { mergedOwner.current = null; lock.current = false; setBusy(false); return; }
     const controller = new AbortController();
-    // A new sign-in loads the saved cart before merging the guest basket.
-    // Failed POSTs are never automatically retried: their outcome may be unknown.
-    lock.current = true; setBusy(true);
+    // Schedule initialization after commit; cleanup cancels it on account changes.
+    const start = setTimeout(() => {
+      if (controller.signal.aborted) return;
+      setError(''); setLoadedOwner(null); setSaved(null);
+      if (!owner) { mergedOwner.current = null; lock.current = false; setBusy(false); return; }
+      lock.current = true; setBusy(true);
+      void load();
+    }, 0);
     async function load() {
       try {
         let cart = await apiRef.current.getCart(controller.signal);
@@ -55,8 +60,7 @@ export function useCustomerCart(products: Product[]) {
         if (!controller.signal.aborted && currentOwner.current === owner) { lock.current = false; setBusy(false); }
       }
     }
-    void load();
-    return () => controller.abort();
+    return () => { clearTimeout(start); controller.abort(); };
   }, [owner, ready, attempt, updateGuest]);
 
   const serverCart = saved?.owner === owner ? saved.cart : null;
@@ -88,16 +92,17 @@ export function useCustomerCart(products: Product[]) {
     } finally { if (currentOwner.current === requestOwner) { lock.current = false; setBusy(false); } }
   }, [owner, loadedOwner, error]);
 
-  async function add(product: Product, size?: string) {
+  async function add(product: Product, size?: string, amount = 1) {
+    if (!Number.isSafeInteger(amount) || amount < 1 || amount > 100000) throw new Error('Choose a valid whole-number quantity.');
     if (!ready) throw new Error('Your account is still loading. Please try again.');
     if (product.stock === 0) throw new Error('This item is sold out.');
     if (product.sizes?.length && !size) throw new Error('Choose a size on the product page.');
-    const inCart = lines.filter(line => line.product.id === product.id).reduce((sum, line) => sum + line.quantity, 0);
-    if (inCart + 1 > (product.stock ?? Infinity)) throw new Error('Not enough stock is available.');
-    if (owner) return mutate(() => api.addItem(product.id, 1, size));
+    const inCart = (owner ? lines : guestRef.current).filter(line => line.product.id === product.id).reduce((sum, line) => sum + line.quantity, 0);
+    if (inCart + amount > Math.min(product.stock ?? Infinity, 100000)) throw new Error('Not enough stock is available.');
+    if (owner) return mutate(() => api.addItem(product.id, amount, size));
     const key = lineKey(product.id, size);
     const existing = guestRef.current.find(line => line.key === key);
-    const quantity = (existing?.quantity || 0) + 1;
+    const quantity = (existing?.quantity || 0) + amount;
     if (product.stock !== undefined && quantity > product.stock) throw new Error('Not enough stock is available.');
     updateGuest(items => [...items.filter(line => line.key !== key), { key, product, quantity, price: product.price, size }]);
   }

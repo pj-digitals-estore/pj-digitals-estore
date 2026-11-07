@@ -1,12 +1,12 @@
 import { useEffect, useRef, useState } from 'react';
 import { AccessibilityInfo, Animated, Easing, Pressable, StyleSheet, View } from 'react-native';
 import { useStoreTheme } from '../ThemeContext';
-import { getStore, money } from '../data/catalog';
-import type { Product } from '../data/types';
+import { getStore as defaultStore, money } from '../data/catalog';
+import type { Product, Store } from '../data/types';
 import ProductPhoto from './ProductPhoto';
 import Text from './AppText';
 
-export default function HomeProducts({ products, onOpen }: { products: Product[]; onOpen: (product: Product) => void }) {
+export default function HomeProducts({ products, onOpen, getStore = defaultStore }: { products: Product[]; onOpen: (product: Product) => void; getStore?: (id: string) => Store }) {
   const { palette } = useStoreTheme();
   const items = products;
   const pages: Product[][] = [];
@@ -32,9 +32,8 @@ export default function HomeProducts({ products, onOpen }: { products: Product[]
     position.current = start;
     locked.current = false;
     offset.setValue(-start * width);
-    setActive(0);
-    setMoving(false);
-    return () => offset.stopAnimation();
+    const reset = setTimeout(() => { setActive(0); setMoving(false); }, 0);
+    return () => { clearTimeout(reset); offset.stopAnimation(); };
   }, [offset, width, count]);
 
   function move(step: number) {
@@ -66,7 +65,7 @@ export default function HomeProducts({ products, onOpen }: { products: Product[]
             <View style={{ flexDirection: 'row', gap: 8 }}>
               {page.map(product => <Pressable key={product.id} accessibilityRole="button" accessibilityLabel={`View ${product.name}, ${money(product.price)}`} onPress={() => onOpen(product)} style={[s.card, { flex: 1, minWidth: 0, backgroundColor: palette.surface, borderColor: palette.border }]}>
                 <View style={{ height: width >= 650 ? 105 : 84, padding: 5 }}><ProductPhoto product={product} /></View>
-                <View style={{ paddingHorizontal: 8, paddingTop: 4, paddingBottom: 8 }}><Text numberOfLines={1} style={[s.kicker, { color: palette.gold }]}>{product.category.toUpperCase()}</Text><Text numberOfLines={2} style={[s.product, { color: palette.text, minHeight: 34 }]}>{product.name}</Text><Text numberOfLines={1} style={[s.subtitle, { color: palette.muted }]}>{getStore(product.store).name}</Text><View style={s.priceRow}><Text style={[s.price, { color: palette.primaryText }]}>{money(product.price)}</Text><Text style={{ color: palette.muted, fontSize: 10 }}>★ {product.rating}</Text></View><Text style={[s.link, { color: palette.primaryText }]}>{product.stock === 0 ? 'Out of stock · View →' : 'View product →'}</Text></View>
+                <View style={{ paddingHorizontal: 8, paddingTop: 4, paddingBottom: 8 }}><Text numberOfLines={1} style={[s.kicker, { color: palette.gold }]}>{product.category.toUpperCase()}</Text><Text numberOfLines={2} style={[s.product, { color: palette.text, minHeight: 34 }]}>{product.name}</Text><Text numberOfLines={1} style={[s.subtitle, { color: palette.muted }]}>{getStore(product.store).name}</Text><View style={s.priceRow}><Text style={[s.price, { color: palette.primaryText }]}>{money(product.price)}</Text>{product.rating ? <Text style={{ color: palette.muted, fontSize: 10 }}>★ {product.rating}</Text> : null}</View><Text style={[s.link, { color: palette.primaryText }]}>{product.stock === 0 ? 'Out of stock · View →' : 'View product →'}</Text></View>
               </Pressable>)}
               {page.length === 1 ? <View style={{ flex: 1 }} /> : null}
             </View>
@@ -85,7 +84,7 @@ const s = StyleSheet.create({
   heading: { flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 12 },
   title: { fontSize: 16, fontWeight: '800' }, subtitle: { fontSize: 10, lineHeight: 14, marginTop: 2 },
   control: { minWidth: 44, minHeight: 44, paddingHorizontal: 12, borderWidth: 1, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
-  card: { boxShadow: '0px 3px 8px rgba(64, 35, 94, 0.14)', borderWidth: 1, borderRadius: 16, overflow: 'hidden' },
+  card: { boxShadow: '0px 3px 8px rgba(142, 108, 255, 0.16)', borderWidth: 1, borderRadius: 16, overflow: 'hidden' },
   kicker: { fontSize: 8, fontWeight: '800', letterSpacing: 0.6 }, product: { fontSize: 13, lineHeight: 17, fontWeight: '800', marginTop: 3 },
   priceRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 10, alignItems: 'center', marginTop: 4 }, price: { fontSize: 16, fontWeight: '800' }, link: { fontSize: 10, fontWeight: '700', marginTop: 4 },
   edgeArrow: { position: 'absolute', top: 28, zIndex: 2, width: 44, height: 44, borderRadius: 22, paddingHorizontal: 0 },

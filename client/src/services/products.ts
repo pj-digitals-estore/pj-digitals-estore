@@ -2,6 +2,8 @@ import { apiRequest } from '../lib/api';
 
 export type ServerProduct = {
   _id: string;
+  shop?: { _id: string; name: string; city: string; address: string; category: string };
+
   name: string;
   description: string;
   price: number;
@@ -26,9 +28,9 @@ function validProduct(value: unknown): value is ServerProduct {
 }
 
 // These two routes are public. Customer code must not call admin mutations.
-export async function getProducts(page = 1, limit = 20, signal?: AbortSignal): Promise<ProductPage> {
+export async function getProducts(page = 1, limit = 20, signal?: AbortSignal, city?: string): Promise<ProductPage> {
   if (!Number.isSafeInteger(page) || page < 1 || !Number.isSafeInteger(limit) || limit < 1 || limit > 100) throw new Error('Invalid product page.');
-  const response = await apiRequest(`/api/products?page=${page}&limit=${limit}`, { signal, headers: { Accept: 'application/json' } });
+  const response = await apiRequest(`/api/products?page=${page}&limit=${limit}${city ? `&city=${encodeURIComponent(city)}` : ''}`, { signal, headers: { Accept: 'application/json' } });
   const result = await response.json();
   if (result.success !== true || !Array.isArray(result.data) || !result.data.every(validProduct)) throw new Error(result.message || 'Invalid product response from server.');
   const pagination = result.pagination;

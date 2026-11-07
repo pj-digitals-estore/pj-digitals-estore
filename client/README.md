@@ -54,3 +54,9 @@ Join our community of developers creating universal apps.
 
 - [Expo on GitHub](https://github.com/expo/expo): View our open source platform and contribute.
 - [Discord community](https://chat.expo.dev): Chat with Expo users and ask questions.
+
+## Clerk login checks (Expo Go and web)
+
+Native login uses Clerk hosted authentication in Expo Go with the current project callback (`exp://host/--/hosted-auth-callback`). Installed builds retain Clerk's native callback defaults. The SDK verifies the callback and activates the session; routing alone never signs in a user. Cancellation and Clerk API errors are displayed, and repeated taps cannot open concurrent login sessions. Web uses the matching browser provider and Clerk embedded UI. Admin server approval remains required.
+
+All four apps limit Metro to two workers so they can run together with lower memory usage. If an old server returns a Metro dependency-graph 500, stop that app's old server and restart from its folder with `pnpm expo start --go --clear`; scan its current QR code.

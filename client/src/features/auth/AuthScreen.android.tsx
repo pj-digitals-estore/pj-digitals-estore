@@ -1,5 +1,5 @@
 import { useEffect } from 'react';
-import Constants from 'expo-constants';
+import { isExpoGo } from '../../lib/hostedAuth';
 import { useSession } from '@clerk/expo';
 import { router, useLocalSearchParams } from 'expo-router';
 import HostedAuthScreen from './HostedAuthScreen';
@@ -7,7 +7,7 @@ import HostedAuthScreen from './HostedAuthScreen';
 // Expo Go cannot load Clerk's custom Android native module. Only load its
 // component in a development/standalone build that includes the native SDK.
 const NativeAuthView: typeof import('@clerk/expo/native-components').AuthView | null =
-  Constants.executionEnvironment === 'storeClient' ? null : require('@clerk/expo/native-components').AuthView;
+  isExpoGo() ? null : require('@clerk/expo/native-components').AuthView;
 
 export default function AuthScreen({ mode }: { mode: 'login' | 'signup' }) {
   const { session } = useSession();

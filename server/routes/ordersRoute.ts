@@ -5,6 +5,8 @@ import {
   getOrder,
   getOrders,
   updateOrderStatus,
+  resumeCheckout,
+  cancelUnpaidOrder,
 } from "../controllers/ordersController.js";
 import { authorize, protect } from "../middleware/auth.js";
 
@@ -18,6 +20,8 @@ OrderRouter.get("/:id", protect, getOrder);
 
 // create orders from cart
 OrderRouter.post("/", protect, createOrder);
+OrderRouter.post('/:id/checkout', protect, resumeCheckout);
+OrderRouter.post('/:id/cancel', protect, cancelUnpaidOrder);
 
 // Update order status (admin)
 OrderRouter.put("/:id/status", protect, authorize("admin"), updateOrderStatus);

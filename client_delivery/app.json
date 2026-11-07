@@ -1,12 +1,34 @@
 {
   "expo": {
-    "name": "TDP Store Delivery",
-    "slug": "tdpstore-delivery",
-    "scheme": "tdpstore-delivery",
+    "name": "NearBy Delivery",
+    "slug": "nearby-delivery",
+    "scheme": "nearby-delivery",
     "version": "1.0.0",
     "orientation": "portrait",
-    "userInterfaceStyle": "light",
-    "plugins": ["expo-router"],
-    "experiments": { "typedRoutes": true }
+    "userInterfaceStyle": "automatic",
+    "backgroundColor": "#171C32",
+    "plugins": [
+      "expo-router",
+      "expo-secure-store",
+      [
+        "@clerk/expo",
+        {
+          "appleSignIn": false
+        }
+      ]
+    ],
+    "experiments": {
+      "typedRoutes": true
+    },
+    "icon": "./assets/images/nearby-logo-original.png",
+    "web": {
+      "favicon": "./assets/images/nearby-logo-original.png"
+    },
+    "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/images/nearby-logo-original.png",
+        "backgroundColor": "#171C32"
+      }
+    }
   }
 }

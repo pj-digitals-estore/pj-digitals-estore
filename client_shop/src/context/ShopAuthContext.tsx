@@ -1,19 +1,17 @@
-import { createContext, useContext, useState, type PropsWithChildren } from 'react';
+import { createContext, useContext, type PropsWithChildren } from 'react';
+import { useAuth, useClerk } from '../live/clerkHooks';
 
 type Account = { id: string; shopName: string; email: string };
-// Frontend preview only: represents an account provided by the admin.
-const demoAccount: Account = { id: 'demo-vv', shopName: 'VV Electricals', email: 'owner@tdp.demo' };
-const Context = createContext<{ account: Account | null; login: (email: string, password: string) => Promise<void>; logout: () => void } | null>(null);
+const Context = createContext<{ account: Account | null; logout: () => void } | null>(null);
 
+// Explicit preview mode uses a real Clerk session but sample business records.
+// Live mode separately requires server-confirmed shop ownership and approval.
 export function ShopAuthProvider({ children }: PropsWithChildren) {
-  const [account, setAccount] = useState<Account | null>(null);
-  async function login(email: string, password: string) {
-    if (email.trim().toLowerCase() !== demoAccount.email || password !== 'TdpDemo123!') {
-      throw new Error('Use the demo account below. Shop access is provided by the admin.');
-    }
-    setAccount(demoAccount);
-  }
-  return <Context.Provider value={{ account, login, logout: () => setAccount(null) }}>{children}</Context.Provider>;
+  const { isLoaded, isSignedIn, userId } = useAuth();
+  const clerk = useClerk();
+  const account: Account | null = isLoaded && isSignedIn && userId
+    ? { id: userId, shopName: 'Preview shop', email: clerk.user?.primaryEmailAddress?.emailAddress ?? '' } : null;
+  return <Context.Provider value={{ account, logout: () => { void clerk.signOut(); } }}>{children}</Context.Provider>;
 }
 
 export function useShopAuth() {

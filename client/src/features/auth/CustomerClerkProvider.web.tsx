@@ -79,7 +79,7 @@ export default function CustomerClerkProvider({ children, publishableKey }: Prop
       .catch(cause => { if (active) setError(cause instanceof Error ? cause.message : 'Unable to load secure sign-in.'); });
     return () => { active = false; };
   }, [publishableKey, attempt]);
-  if (!ui) return <div role="status" style={{ padding: 32, textAlign: 'center', color: '#512C80', background: '#F7F3FC', minHeight: '100vh', fontFamily: 'sans-serif' }}>
+  if (!ui) return <div role="status" style={{ padding: 32, textAlign: 'center', color: '#A9C2FF', background: '#171C32', minHeight: '100vh', fontFamily: 'sans-serif' }}>
     <p>{error || 'Loading NearBy…'}</p>
     {error ? <button onClick={() => setAttempt(value => value + 1)}>Retry</button> : null}
   </div>;

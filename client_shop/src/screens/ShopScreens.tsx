@@ -1,9 +1,11 @@
+import ShopAccountSettings from '../live/ShopAccountSettings';
+import ProductImagePicker, { type ProductImage } from '../components/ProductImagePicker';
 import { useMemo, useState } from 'react';
 import { useRouter } from 'expo-router';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
-import { Alert, Modal, Pressable, ScrollView, Text, TextInput, View } from 'react-native';
+import { Alert, Image, Modal, Pressable, ScrollView, Text, TextInput, View } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { Badge, Button, Card, Metric, Page, Section, C, S } from '../components/ShopUI';
+import { Badge, Button, Card, Metric, Page, Section, useShopStyles } from '../components/ShopUI';
 import { useShop } from '../context/ShopDataContext';
 import type { Delivery, Order, Product, ProductUpdate } from '../context/ShopDataContext';
 
@@ -15,42 +17,66 @@ function deliveryLabel(status?: Delivery['status']) {
  return status;
 }
 function OrderRow({ order }: { order: Order }) {
+  const { S } = useShopStyles();
+
  const { deliveries } = useShop();
  const status = deliveryLabel(deliveries.find(delivery => delivery.orderId === order.id)?.status);
  return <View style={S.dividerRow}><View style={S.row}><View style={{ flex: 1 }}><Text style={S.orderId}>{order.id} · {order.customer}</Text><Text style={S.small}>{order.items} item{order.items === 1 ? '' : 's'} · {order.time}</Text></View><View style={{ alignItems: 'flex-end' }}><Text style={S.price}>{cash(order.total)}</Text><View style={{ marginTop: 6 }}><Badge value={status} /></View></View></View></View>;
 }
 function ProductRow({ product }: { product: Product }) {
+  const { S } = useShopStyles();
+
  const symbol = product.category === 'Textiles' ? '▱' : product.category === 'Computer Items' ? '⌘' : product.category === 'Home Appliances' ? '⌂' : '◇';
- return <View style={S.productRow}><View style={S.glyph}><Text style={S.glyphText}>{symbol}</Text></View><View style={{ flex: 1 }}><Text style={S.name}>{product.name}</Text><Text style={S.small}>{product.sku} · {product.category}</Text></View><View style={{ alignItems: 'flex-end' }}><Text style={S.price}>{cash(product.price)}</Text><Text style={S.small}>{product.stock} in stock</Text></View></View>;
+ return <View style={S.productRow}><View style={S.glyph}>{product.images?.[0] ? <Image source={{uri:product.images[0]}} resizeMode="contain" style={{width:36,height:36,borderRadius:7}}/> : <Text style={S.glyphText}>{symbol}</Text>}</View><View style={{ flex: 1 }}><Text style={S.name}>{product.name}</Text><Text style={S.small}>{product.sku} · {product.category}</Text></View><View style={{ alignItems: 'flex-end' }}><Text style={S.price}>{cash(product.price)}</Text><Text style={S.small}>{product.stock} in stock</Text></View></View>;
 }
-function Filter({ items, value, onChange }: { items: string[]; value: string; onChange: (value: string) => void }) { return <View style={S.chips}>{items.map((item) => <Pressable key={item} onPress={() => onChange(item)} style={[S.chip, item === value && S.chipOn]}><Text style={[S.chipText, item === value && S.chipTextOn]}>{item}</Text></Pressable>)}</View>; }
+function Filter({ items, value, onChange }: { items: string[]; value: string; onChange: (value: string) => void }) {
+  const { S } = useShopStyles();
+ return <View style={S.chips}>{items.map((item) => <Pressable key={item} onPress={() => onChange(item)} style={[S.chip, item === value && S.chipOn]}><Text style={[S.chipText, item === value && S.chipTextOn]}>{item}</Text></Pressable>)}</View>; }
 function ProductModal({ visible, close }: { visible: boolean; close: () => void }) {
+  const { C, S } = useShopStyles();
+
+ const [error, setError] = useState('');
+ const [images, setImages] = useState<ProductImage[]>([]);
  const { addProduct } = useShop(); const [name, setName] = useState(''); const [price, setPrice] = useState(''); const [category, setCategory] = useState(''); const [stock, setStock] = useState('');
- const save = () => { if (!name.trim() || !price || !Number.isFinite(Number(price))) return Alert.alert('Add product', 'Enter a product name and valid price.'); addProduct({ name: name.trim(), price: Number(price), category: category.trim() || 'General', stock: Math.max(0, Number(stock) || 0) }); setName(''); setPrice(''); setCategory(''); setStock(''); close(); };
+ const save = () => {
+  const amount = Number(price);
+  const quantity = stock.trim() ? Number(stock) : 0;
+  if (!name.trim()) return setError('Enter a product name.');
+  if (!price.trim() || !Number.isFinite(amount) || amount < 0) return setError('Enter a price of zero or more, without commas.');
+  if (!Number.isSafeInteger(quantity) || quantity < 0) return setError('Stock must be a whole number of zero or more.');
+  addProduct({ name: name.trim(), price: amount, category: category.trim() || 'General', stock: quantity, images: images.map(image => image.uri) });
+  setImages([]); setError(''); setName(''); setPrice(''); setCategory(''); setStock(''); close();
+ };
  return <Modal visible={visible} transparent animationType="fade" onRequestClose={close}><View style={S.modalShade}><ScrollView contentContainerStyle={{ flexGrow: 1, justifyContent: 'center' }} keyboardShouldPersistTaps="handled"><View style={S.modal}><View style={[S.row, { justifyContent: 'space-between' }]}><Text style={S.orderId}>Add a product</Text><Pressable onPress={close}><Text style={{ color: C.muted, fontSize: 22 }}>×</Text></Pressable></View>
-  <Text style={S.label}>PRODUCT NAME</Text><TextInput value={name} onChangeText={setName} placeholder="e.g. Bluetooth speaker" placeholderTextColor="#697568" style={S.input} />
-  <View style={S.row}><View style={{ flex: 1, marginRight: 7 }}><Text style={S.label}>PRICE (₹)</Text><TextInput value={price} onChangeText={setPrice} keyboardType="decimal-pad" placeholder="2,499" placeholderTextColor="#697568" style={S.input} /></View><View style={{ flex: 1, marginLeft: 7 }}><Text style={S.label}>STARTING STOCK</Text><TextInput value={stock} onChangeText={setStock} keyboardType="number-pad" placeholder="0" placeholderTextColor="#697568" style={S.input} /></View></View>
-  <Text style={S.label}>CATEGORY</Text><TextInput value={category} onChangeText={setCategory} placeholder="Electronics, textiles..." placeholderTextColor="#697568" style={S.input} />
+  <Text style={S.label}>PRODUCT NAME</Text><TextInput value={name} onChangeText={setName} placeholder="e.g. Bluetooth speaker" placeholderTextColor={C.muted} style={S.input} />
+  <View style={S.row}><View style={{ flex: 1, marginRight: 7 }}><Text style={S.label}>PRICE (₹)</Text><TextInput value={price} onChangeText={setPrice} keyboardType="decimal-pad" placeholder="2499.00" placeholderTextColor={C.muted} style={S.input} /></View><View style={{ flex: 1, marginLeft: 7 }}><Text style={S.label}>STARTING STOCK</Text><TextInput value={stock} onChangeText={setStock} keyboardType="number-pad" placeholder="0" placeholderTextColor={C.muted} style={S.input} /></View></View>
+  <Text style={S.label}>CATEGORY</Text><TextInput value={category} onChangeText={setCategory} placeholder="Electronics, textiles..." placeholderTextColor={C.muted} style={S.input} />
+  {error ? <Text accessibilityRole="alert" style={{ color: C.red, marginBottom: 12 }}>{error}</Text> : null}
+  <ProductImagePicker images={images} onChange={setImages} />
   <Button label="Save product" onPress={save} /><Text style={[S.small, { marginTop: 9 }]}>Demo only. Your item will be stored in memory.</Text></View></ScrollView></View></Modal>;
 }
 function TeamModal({ visible, close }: { visible: boolean; close: () => void }) {
+  const { C, S } = useShopStyles();
+
  const { addMember } = useShop(); const [name, setName] = useState(''); const [email, setEmail] = useState(''); const [role, setRole] = useState('Order staff');
  const save = () => { if (!name.trim() || !email.trim()) return Alert.alert('Invite staff', 'Enter a name and email.'); addMember({ name: name.trim(), email: email.trim(), role }); setName(''); setEmail(''); close(); };
  return <Modal visible={visible} transparent animationType="fade" onRequestClose={close}><View style={S.modalShade}><ScrollView contentContainerStyle={{ flexGrow: 1, justifyContent: 'center' }} keyboardShouldPersistTaps="handled"><View style={S.modal}><View style={[S.row, { justifyContent: 'space-between' }]}><Text style={S.orderId}>Add a team member</Text><Pressable onPress={close}><Text style={{ color: C.muted, fontSize: 22 }}>×</Text></Pressable></View>
- <Text style={S.label}>FULL NAME</Text><TextInput value={name} onChangeText={setName} placeholder="Team member name" placeholderTextColor="#697568" style={S.input} />
- <Text style={S.label}>EMAIL</Text><TextInput value={email} onChangeText={setEmail} autoCapitalize="none" keyboardType="email-address" placeholder="name@example.com" placeholderTextColor="#697568" style={S.input} />
+ <Text style={S.label}>FULL NAME</Text><TextInput value={name} onChangeText={setName} placeholder="Team member name" placeholderTextColor={C.muted} style={S.input} />
+ <Text style={S.label}>EMAIL</Text><TextInput value={email} onChangeText={setEmail} autoCapitalize="none" keyboardType="email-address" placeholder="name@example.com" placeholderTextColor={C.muted} style={S.input} />
  <Text style={S.label}>ROLE</Text><Filter items={['Store manager', 'Order staff', 'Inventory staff']} value={role} onChange={setRole} />
  <Button label="Add to team" onPress={save} /><Text style={[S.small, { marginTop: 9 }]}>Demo only. An invitation will not be sent yet.</Text></View></ScrollView></View></Modal>;
 }
 
 export function Home() {
+  const { C, S } = useShopStyles();
+
  const { orders, products } = useShop();
  const router = useRouter();
  const [addingProduct, setAddingProduct] = useState(false);
- const openOrders = orders.filter((o) => o.status !== 'Completed'); const low = products.filter((p) => p.stock <= 4);
+ const openOrders = orders.filter((o) => o.status !== 'Completed'); const low = products.filter((p) => p.stock <= p.reorderLevel);
  return <Page title="Good morning" subtitle="Here is what is happening at your shop today.">
-  <LinearGradient colors={['#277052', '#174E3C', '#10382A']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={S.banner}><Text style={S.eyebrow}>YOUR STORE AT A GLANCE</Text><Text style={S.bannerTitle}>Your shop, all in one place.</Text><Text style={S.bannerCopy}>View orders, keep products in stock, and help customers find what they need.</Text></LinearGradient>
-  <View style={S.metrics}><Metric label="Sales today" value="₹1,24,800" foot="↑ 12% from yesterday" /><Metric label="Active orders" value={String(openOrders.length).padStart(2, '0')} foot="Orders needing attention" /><Metric label="Products listed" value={String(products.length).padStart(2, '0')} foot="In your catalogue" /></View>
+  <LinearGradient colors={C.gradient} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={S.banner}><Text style={S.eyebrow}>YOUR STORE AT A GLANCE</Text><Text style={S.bannerTitle}>Your shop, all in one place.</Text><Text style={S.bannerCopy}>View orders, keep products in stock, and help customers find what they need.</Text></LinearGradient>
+  <View style={S.metrics}><Metric label="Sample order value" value={cash(orders.reduce((total, order) => total + order.total, 0))} foot="Sample order totals · not paid revenue" /><Metric label="Active orders" value={String(openOrders.length).padStart(2, '0')} foot="Orders needing attention" /><Metric label="Products listed" value={String(products.length).padStart(2, '0')} foot="In your catalogue" /></View>
   <Section>Quick actions</Section>
   <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 12 }}>
     <Pressable accessibilityRole="button" onPress={() => setAddingProduct(true)} style={[S.card, { flex: 1, minWidth: 140, padding: 18, gap: 9 }]}>
@@ -69,11 +95,15 @@ export function Home() {
  </Page>;
 }
 export function Orders() {
+  const { S } = useShopStyles();
+
  const { orders, deliveries } = useShop(); const [filter, setFilter] = useState('All');
  const visible = filter === 'All' ? orders : orders.filter(order => deliveryLabel(deliveries.find(delivery => delivery.orderId === order.id)?.status) === filter);
  return <Page title="Orders" subtitle="Track pickup and delivery for your shop’s orders."><Filter items={['All', 'Awaiting pickup', 'Picked up', 'Out for delivery', 'Delivered']} value={filter} onChange={setFilter} /><Card>{visible.length ? visible.map((o) => <OrderRow key={o.id} order={o} />) : <Text style={S.small}>No orders in this group.</Text>}</Card><Text style={[S.small, { marginTop: 12 }]}>View only · Sample pickup and delivery statuses.</Text></Page>;
 }
 function DeliveryCard({ delivery }: { delivery: Delivery }) {
+  const { C, S } = useShopStyles();
+
  const steps = ['Pickup', 'Delivery'];
  const current: Record<Delivery['status'], number> = { Preparing: -1, 'Ready for pickup': -1, 'Picked up': 0, 'In transit': 0, 'Out for delivery': 0, Delivered: 1 };
  const currentStep = current[delivery.status];
@@ -86,6 +116,8 @@ function DeliveryCard({ delivery }: { delivery: Delivery }) {
 }
 
 export function Deliveries() {
+  const { S } = useShopStyles();
+
  const { deliveries } = useShop();
  const [filter, setFilter] = useState('All');
  const shown = deliveries.filter((d) => filter === 'All' || (filter === 'Delivered' ? d.status === 'Delivered' : d.status !== 'Delivered'));
@@ -98,15 +130,28 @@ export function Deliveries() {
  </Page>;
 }
 export function Products() {
- const { products } = useShop(); const [query, setQuery] = useState(''); const [show, setShow] = useState(false);
+  const { C, S } = useShopStyles();
+
+ const { products, updateProduct } = useShop(); const [query, setQuery] = useState(''); const [show, setShow] = useState(false);
+ const [imageProduct, setImageProduct] = useState<Product | null>(null);
  const list = useMemo(() => products.filter((p) => (p.name + p.sku + p.category).toLowerCase().includes(query.toLowerCase())), [products, query]);
- return <Page title="Products" subtitle="Add items to your store and keep their details up to date."><View style={[S.row, { marginBottom: 13 }]}><TextInput value={query} onChangeText={setQuery} placeholder="Search products or SKU" placeholderTextColor="#697568" style={[S.input, { flex: 1, marginBottom: 0, marginRight: 8 }]} /><Button label="＋ Add" onPress={() => setShow(true)} /></View><Card>{list.length ? list.map((p) => <ProductRow key={p.id} product={p} />) : <Text style={S.small}>No products match your search.</Text>}</Card><ProductModal visible={show} close={() => setShow(false)} /></Page>;
+ return <Page title="Products" subtitle="Add items to your store and keep their details up to date."><View style={[S.row, { marginBottom: 13 }]}><TextInput value={query} onChangeText={setQuery} placeholder="Search products or SKU" placeholderTextColor={C.muted} style={[S.input, { flex: 1, marginBottom: 0, marginRight: 8 }]} /><Button label="＋ Add" onPress={() => setShow(true)} /></View><Card>{list.length ? list.map((p) => <View key={p.id}><ProductRow product={p} /><Button label="Edit product images" onPress={() => setImageProduct(p)} /></View>) : <Text style={S.small}>No products match your search.</Text>}</Card><ProductModal visible={show} close={() => setShow(false)} />{imageProduct ? <ProductImagesModal key={imageProduct.id} product={imageProduct} close={() => setImageProduct(null)} save={(images) => { updateProduct(imageProduct.id, { images }); setImageProduct(null); }} /> : null}</Page>;
 }
+function ProductImagesModal({product,close,save}:{product:Product;close:()=>void;save:(images:string[])=>void}) {
+ const {C,S}=useShopStyles();
+ const [images,setImages]=useState<ProductImage[]>(()=>(product.images||[]).slice(0,5).map(uri=>({uri})));
+ const [error,setError]=useState('');
+ return <Modal visible transparent animationType="fade" onRequestClose={close}><View style={S.modalShade}><View style={[S.modal,{maxHeight:'100%'}]}><ScrollView keyboardShouldPersistTaps="handled"><Text style={S.title}>Edit product images</Text><Text style={S.small}>{product.name} · Preview only</Text><ProductImagePicker images={images} onChange={setImages}/>{error?<Text accessibilityRole="alert" style={{color:C.red}}>{error}</Text>:null}<Button label="Save product images" onPress={()=>{if(!images.length){setError('Keep at least one product image.');return;}save(images.map(image=>image.uri));}}/><View style={{height:12}}/><Button label="Cancel" onPress={close}/></ScrollView></View></View></Modal>;
+}
+
 type StockFields = { name: string; sku: string; category: string; price: string; stock: string; reorderLevel: string; location: string };
 function EditStockModal({ product, visible, close, saveProduct }: { product: Product | null; visible: boolean; close: () => void; saveProduct: (id: string, details: ProductUpdate) => void }) {
+  const { C, S } = useShopStyles();
+
  const { products } = useShop();
  const [fields, setFields] = useState(() => product ? { name: product.name, sku: product.sku, category: product.category, price: String(product.price), stock: String(product.stock), reorderLevel: String(product.reorderLevel), location: product.location } : { name: '', sku: '', category: '', price: '', stock: '', reorderLevel: '', location: '' });
  const [error, setError] = useState('');
+ const [images, setImages] = useState<ProductImage[]>(() => (product?.images || []).slice(0,5).map(uri => ({uri})));
  const change = (key: keyof StockFields, value: string) => setFields((current) => ({ ...current, [key]: value }));
  const submit = () => {
   if (!product) return;
@@ -116,9 +161,9 @@ function EditStockModal({ product, visible, close, saveProduct }: { product: Pro
   const reorderLevel = Number(fields.reorderLevel);
   if (!fields.name.trim() || !sku || !fields.category.trim() || !fields.location.trim()) return setError('Fill in the name, SKU, category, and shelf location.');
   if (!fields.price.trim() || !Number.isFinite(price) || price < 0) return setError('Enter a valid price in rupees.');
-  if (!Number.isInteger(stock) || stock < 0 || !Number.isInteger(reorderLevel) || reorderLevel < 0) return setError('Stock and reorder level must be whole numbers of zero or more.');
+  if (!fields.stock.trim() || !fields.reorderLevel.trim() || !Number.isSafeInteger(stock) || stock < 0 || !Number.isSafeInteger(reorderLevel) || reorderLevel < 0) return setError('Stock and reorder level must be whole numbers of zero or more.');
   if (products.some((item) => item.id !== product.id && item.sku.toLowerCase() === sku.toLowerCase())) return setError('That SKU is already used by another product.');
-  saveProduct(product.id, { name: fields.name.trim(), sku, category: fields.category.trim(), price, stock, reorderLevel, location: fields.location.trim() });
+  saveProduct(product.id, { name: fields.name.trim(), sku, category: fields.category.trim(), price, stock, reorderLevel, location: fields.location.trim(), images: images.map(image => image.uri) });
   close();
  };
  if (!product) return null;
@@ -131,6 +176,7 @@ function EditStockModal({ product, visible, close, saveProduct }: { product: Pro
     <View style={S.row}><View style={{ flex: 1, marginRight: 7 }}><Text style={S.label}>PRICE (₹)</Text><TextInput value={fields.price} onChangeText={(value) => change('price', value)} keyboardType="decimal-pad" style={S.input} /></View><View style={{ flex: 1, marginLeft: 7 }}><Text style={S.label}>QUANTITY</Text><TextInput value={fields.stock} onChangeText={(value) => change('stock', value)} keyboardType="number-pad" style={S.input} /></View></View>
     <View style={S.row}><View style={{ flex: 1, marginRight: 7 }}><Text style={S.label}>REORDER LEVEL</Text><TextInput value={fields.reorderLevel} onChangeText={(value) => change('reorderLevel', value)} keyboardType="number-pad" style={S.input} /></View><View style={{ flex: 1, marginLeft: 7 }}><Text style={S.label}>SHELF LOCATION</Text><TextInput value={fields.location} onChangeText={(value) => change('location', value)} style={S.input} /></View></View>
     {error ? <Text style={{ color: C.red, fontSize: 12, marginBottom: 11 }}>{error}</Text> : null}
+    <ProductImagePicker images={images} onChange={setImages} />
     <View style={S.row}><Button label="Cancel" secondary onPress={close} style={{ flex: 1, marginRight: 6 }} /><Button label="Save changes" onPress={submit} style={{ flex: 1, marginLeft: 6 }} /></View>
    </View>
   </ScrollView></View>
@@ -138,6 +184,8 @@ function EditStockModal({ product, visible, close, saveProduct }: { product: Pro
 }
 
 function DeleteStockModal({ product, visible, cancel, confirm }: { product: Product | null; visible: boolean; cancel: () => void; confirm: () => void }) {
+  const { S } = useShopStyles();
+
  if (!product) return null;
  return <Modal visible={visible} transparent animationType="fade" onRequestClose={cancel}>
   <View style={S.modalShade}><View style={S.modal}>
@@ -148,6 +196,8 @@ function DeleteStockModal({ product, visible, cancel, confirm }: { product: Prod
  </Modal>;
 }
 export function Inventory() {
+  const { C, S } = useShopStyles();
+
  const { products, changeStock, updateProduct, deleteProduct } = useShop();
  const [filter, setFilter] = useState('All stock');
  const [editingProduct, setEditingProduct] = useState<Product | null>(null);
@@ -183,7 +233,7 @@ export function Inventory() {
    </View>
    <View style={[S.row, { marginTop: 12 }]}>
     <Button label="Edit details" secondary onPress={() => setEditingProduct(p)} style={{ flex: 1, marginRight: 6 }} />
-    <Button label="Delete" secondary onPress={() => setDeletingProduct(p)} style={{ flex: 1, marginLeft: 6, borderColor: '#E2C7CC', backgroundColor: '#F5E6E9' }} />
+    <Button label="Delete" secondary onPress={() => setDeletingProduct(p)} style={{ flex: 1, marginLeft: 6, borderColor: C.border, backgroundColor: C.warningSurface }} />
    </View>
   </View>) : <Text style={S.small}>No products match this stock status.</Text>}</Card>
   <Text style={[S.small, { marginTop: 12 }]}>Inventory changes are temporary until the backend is connected.</Text>
@@ -192,12 +242,16 @@ export function Inventory() {
  </Page>;
 }
 export function Team() {
+  const { C, S } = useShopStyles();
+
  const { team } = useShop(); const [show, setShow] = useState(false);
  return <Page title="Your team" subtitle="Give staff clear roles to help run the store together."><Card><Text style={S.orderId}>Access at a glance</Text><Text style={[S.small, { lineHeight: 19, marginTop: 6 }]}>Owners manage the whole store. Managers oversee daily work. Staff can help with orders or stock.</Text></Card><View style={[S.row, { justifyContent: 'space-between', marginVertical: 13 }]}><Text style={S.orderId}>Team members ({team.length})</Text><Button label="＋ Invite staff" onPress={() => setShow(true)} /></View><Card>{team.map((person, index) => <View key={person.id} style={[S.productRow, index === team.length - 1 && { borderBottomWidth: 0 }]}><View style={S.avatar}><Text style={S.avatarText}>{person.initials}</Text></View><View style={{ flex: 1 }}><Text style={S.name}>{person.name}</Text><Text style={S.small}>{person.email}</Text></View><View style={{ alignItems: 'flex-end' }}><Badge value={person.role} /><Text style={[S.small, { color: C.green }]}>Active</Text></View></View>)}</Card><TeamModal visible={show} close={() => setShow(false)} /></Page>;
 }
 export function Store() {
+  const { C, S } = useShopStyles();
+
  return <Page title="Shop profile" subtitle="Your shop’s details.">
-  <Section>Store profile</Section><Card>{[['Store name', 'VV Electricals'], ['Category', 'Electronics & home appliances'], ['Location', 'MG Road, Thodupuzha']].map((row, i) => <View key={row[0]} style={[S.row, { justifyContent: 'space-between', paddingVertical: 14, borderBottomColor: C.line, borderBottomWidth: i === 2 ? 0 : 1 }]}><Text style={S.small}>{row[0]}</Text><Text style={[S.name, { fontSize: 11 }]}>{row[1]}</Text></View>)}</Card>
+  <ShopAccountSettings /><Section>Store profile</Section><Card>{[['Store name', 'VV Electricals'], ['Category', 'Electronics & home appliances'], ['Location', 'MG Road, Thodupuzha']].map((row, i) => <View key={row[0]} style={[S.row, { justifyContent: 'space-between', paddingVertical: 14, borderBottomColor: C.line, borderBottomWidth: i === 2 ? 0 : 1 }]}><Text style={S.small}>{row[0]}</Text><Text style={[S.name, { fontSize: 11 }]}>{row[1]}</Text></View>)}</Card>
  </Page>;
 }
 

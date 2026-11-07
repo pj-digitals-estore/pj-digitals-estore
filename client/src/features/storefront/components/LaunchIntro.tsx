@@ -31,7 +31,7 @@ export default function LaunchIntro({ transition: exit }: { transition: Animated
 
   if (!visible) return null;
   return <Animated.View style={[styles.overlay, { transform: [{ translateX: exit.interpolate({ inputRange: [0, 1], outputRange: [0, -width] }) }] }]} accessibilityViewIsModal accessibilityLabel="Welcome to NearBy">
-    <LinearGradient colors={['#F3EBFF', '#DDC7F5', '#C7A5E8']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={StyleSheet.absoluteFill} />
+    <LinearGradient colors={['#241D43', '#44307B', '#205EB2']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={StyleSheet.absoluteFill} />
     <Animated.View style={[styles.center, { opacity: entrance, transform: [{ translateY: entrance.interpolate({ inputRange: [0, 1], outputRange: [30, 0] }) }] }]}>
       <View style={styles.halo}><BrandLogo size={100} /></View>
       <Text style={styles.name}>NearBy</Text>
@@ -47,13 +47,13 @@ export default function LaunchIntro({ transition: exit }: { transition: Animated
 }
 
 const styles = StyleSheet.create({
-  overlay: { ...StyleSheet.absoluteFill, zIndex: 1000, backgroundColor: '#EEE5F8', alignItems: 'center', justifyContent: 'center' },
-  center: { alignItems: 'center', paddingHorizontal: 24 }, halo: { borderWidth: 1, borderColor: 'rgba(85,67,15,0.22)', borderRadius: 50, padding: 9 },
-  logo: { boxShadow: '0px 6px 20px rgba(77, 43, 112, 0.16)', width: 80, height: 80, borderRadius: 40, borderWidth: 1, borderColor: '#AA85CC', backgroundColor: '#FFFFFF', alignItems: 'center', justifyContent: 'center' }, logoText: { color: '#30243F', fontSize: 24, fontWeight: '800', letterSpacing: 2 },
-  name: { color: '#30243F', fontSize: 36, fontWeight: '600', marginTop: 22, letterSpacing: -1 },
-  ornament: { flexDirection: 'row', alignItems: 'center', gap: 15, marginTop: 17 }, line: { width: 43, height: 1, backgroundColor: '#AA85CC' }, flower: { color: '#7042B8', fontSize: 18 },
-  local: { color: '#7042B8', fontSize: 9, fontWeight: '800', letterSpacing: 2.3, marginTop: 18 }, tagline: { color: '#665071', fontSize: 12, marginTop: 10, textAlign: 'center' },
-  loadingLabel: { color: '#665071', fontSize: 8, letterSpacing: 1.2, marginBottom: 10 },
-  loadingTrack: { width: 220, height: 4, borderRadius: 4, backgroundColor: '#D7C6E9', marginBottom: 25, overflow: 'hidden' }, loadingBar: { width: '100%', height: 4, borderRadius: 4, backgroundColor: '#7042B8' },
-  footer: { position: 'absolute', bottom: 45, alignItems: 'center', paddingHorizontal: 20 }, footerText: { color: '#7042B8', fontSize: 8, letterSpacing: 2, fontWeight: '700' }, delivery: { color: '#665071', fontSize: 10, marginTop: 8 },
+  overlay: { ...StyleSheet.absoluteFill, zIndex: 1000, backgroundColor: '#171C32', alignItems: 'center', justifyContent: 'center' },
+  center: { alignItems: 'center', paddingHorizontal: 24 }, halo: { borderWidth: 1, borderColor: 'rgba(168,150,255,0.60)', borderRadius: 50, padding: 9 },
+  logo: { boxShadow: '0px 6px 20px rgba(24, 61, 105, 0.16)', width: 80, height: 80, borderRadius: 40, borderWidth: 1, borderColor: '#89B5E3', backgroundColor: '#FFFFFF', alignItems: 'center', justifyContent: 'center' }, logoText: { color: '#F4F5FF', fontSize: 24, fontWeight: '800', letterSpacing: 2 },
+  name: { color: '#F4F5FF', fontSize: 36, fontWeight: '600', marginTop: 22, letterSpacing: -1 },
+  ornament: { flexDirection: 'row', alignItems: 'center', gap: 15, marginTop: 17 }, line: { width: 43, height: 1, backgroundColor: '#89B5E3' }, flower: { color: '#C6A6FF', fontSize: 18 },
+  local: { color: '#C6A6FF', fontSize: 9, fontWeight: '800', letterSpacing: 2.3, marginTop: 18 }, tagline: { color: '#BAC3DF', fontSize: 12, marginTop: 10, textAlign: 'center' },
+  loadingLabel: { color: '#BAC3DF', fontSize: 8, letterSpacing: 1.2, marginBottom: 10 },
+  loadingTrack: { width: 220, height: 4, borderRadius: 4, backgroundColor: '#3A3B68', marginBottom: 25, overflow: 'hidden' }, loadingBar: { width: '100%', height: 4, borderRadius: 4, backgroundColor: '#C6A6FF' },
+  footer: { position: 'absolute', bottom: 45, alignItems: 'center', paddingHorizontal: 20 }, footerText: { color: '#C6A6FF', fontSize: 8, letterSpacing: 2, fontWeight: '700' }, delivery: { color: '#BAC3DF', fontSize: 10, marginTop: 8 },
 });

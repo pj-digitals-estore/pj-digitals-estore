@@ -17,6 +17,9 @@ export default function RootDocument({ children }: PropsWithChildren) {
   const source = clerkUiSource();
   return <html lang="en">
     <head>
+      <title>NearBy</title>
+      <meta name="application-name" content="NearBy" />
+      <meta name="apple-mobile-web-app-title" content="NearBy" />
       <meta charSet="utf-8" />
       <meta httpEquiv="X-UA-Compatible" content="IE=edge" />
       <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />

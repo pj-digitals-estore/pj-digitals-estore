@@ -23,7 +23,7 @@ function AppShell() {
     <StatusBar hidden={false} style={mode === 'dark' ? 'light' : 'dark'} />
     <View style={{ flex: 1, overflow: 'hidden' }}>
     <Animated.View style={{ flex: 1, transform: [{ translateX: transition.interpolate({ inputRange: [0, 1], outputRange: [width, 0] }) }] }}>
-      <ServerConnection><Stack screenOptions={{ headerShown: false }} /></ServerConnection>
+      <ServerConnection><Stack screenOptions={{ headerShown: false, title: 'NearBy' }} /></ServerConnection>
     </Animated.View>
     <LaunchIntro transition={transition} />
   </View></SafeAreaView>;

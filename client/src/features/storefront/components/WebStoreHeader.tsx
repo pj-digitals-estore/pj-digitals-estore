@@ -4,11 +4,12 @@ import BrandLogo from '@/components/BrandLogo';
 import Text from './AppText';
 import InterfaceIcon from './InterfaceIcon';
 import { useStoreTheme } from '../ThemeContext';
-import { categories, getStore, money } from '../data/catalog';
+import { getStore, money } from '../data/catalog';
 import type { Product, Tab } from '../data/types';
 import ProductPhoto from './ProductPhoto';
+import { NotificationBell } from './CustomerNotifications';
 
-type Props = { active: Tab; location: string; products: Product[]; onProduct: (product: Product) => void; cartCount: number; favorites: number; customerName?: string; onNavigate: (tab: Tab) => void; onSearch: (query: string) => void; onLocation: () => void; onAccount: () => void; onMenu: () => void };
+type Props = { unreadNotifications: number; onNotifications: () => void; location: string; products: Product[]; onProduct: (product: Product) => void; cartCount: number; favorites: number; customerName?: string; onNavigate: (tab: Tab) => void; onSearch: (query: string) => void; onLocation: () => void; onAccount: () => void; onMenu: () => void };
 export default function WebStoreHeader(props: Props) {
   const { palette: p } = useStoreTheme();
   const [query, setQuery] = useState('');
@@ -44,28 +45,25 @@ export default function WebStoreHeader(props: Props) {
           <Pressable accessibilityRole="button" onPress={() => { setFocused(false); props.onSearch(query); }} style={[s.allResults, { borderTopColor: p.border }]}><Text style={[s.actionText, { color: p.primaryText }]}>See all results for “{query.trim()}” →</Text></Pressable>
         </View> : null}
       </View>
+      <NotificationBell count={props.unreadNotifications} onPress={props.onNotifications} />
       <View><Pressable accessibilityRole="button" onPress={props.onAccount} style={s.action}><Text style={[s.small, { color: p.muted }]}>{props.customerName ? 'Welcome back' : 'Welcome to NearBy'}</Text><Text style={[s.actionText, { color: p.primaryText }]}>{props.customerName || 'Sign in / Sign up'}</Text></Pressable></View>
       <Pressable accessibilityRole="button" accessibilityLabel={`Wishlist, ${props.favorites} items`} onPress={() => props.onNavigate('Favorites')} style={s.iconAction}><InterfaceIcon name="heart" size={22} color={p.primaryText} /><Text style={[s.small, { color: p.text }]}>Saved {props.favorites || ''}</Text></Pressable>
       <Pressable accessibilityRole="button" accessibilityLabel={`Cart, ${props.cartCount} items`} onPress={() => props.onNavigate('Cart')} style={[s.cart, { backgroundColor: p.soft }]}><InterfaceIcon name="bag" color={p.primaryText} /><Text style={[s.actionText, { color: p.primaryText }]}>Cart ({props.cartCount})</Text></Pressable>
     </View>
     <View style={[s.navBorder, { borderColor: p.border }]}><View style={s.nav}>
-      {([{ label: 'Home', tab: 'Home' }, { label: 'Supermarket', tab: 'Supermarket' }, { label: 'Shop by name', tab: 'Shops' }] as const).map(link => <Pressable key={link.tab} accessibilityRole="button" accessibilityState={{ selected: props.active === link.tab }} onPress={() => props.onNavigate(link.tab)} style={[s.navLink, { borderBottomColor: props.active === link.tab ? p.primary : 'transparent' }]}><Text style={[s.actionText, { color: props.active === link.tab ? p.primaryText : p.text }]}>{link.label}</Text></Pressable>)}
-      <View style={[s.separator, { backgroundColor: p.border }]} />
-      {categories.map(category => <Pressable key={category} accessibilityRole="button" onPress={() => props.onSearch(category)} style={s.category}><Text style={[s.small, { color: p.muted }]}>{category}</Text></Pressable>)}
-      <View style={{ flex: 1 }} />
-      <Pressable accessibilityRole="button" accessibilityLabel={`Change delivery location, ${props.location}`} onPress={props.onLocation} style={s.category}><Text style={[s.small, { color: p.primaryText }]}>⌖ {props.location} ▾</Text></Pressable>
-      <Pressable accessibilityRole="button" accessibilityLabel="More account options" onPress={props.onMenu} style={s.menu}><InterfaceIcon name="menu" color={p.primaryText} /></Pressable>
+      <Pressable accessibilityRole="button" accessibilityLabel={`Switch location, currently ${props.location}`} onPress={props.onLocation} style={[s.location, { backgroundColor: p.soft, borderColor: p.border }]}><Text style={{ color: p.primaryText, fontSize: 18 }}>⌖</Text><Text style={[s.actionText, { color: p.primaryText }]}>Switch location</Text><Text style={{ color: p.primaryText }}>▾</Text></Pressable>
+      <Pressable accessibilityRole="button" accessibilityLabel="Open menu" onPress={props.onMenu} style={s.menu}><InterfaceIcon name="menu" color={p.primaryText} /><Text style={[s.actionText, { color: p.primaryText }]}>Menu</Text></Pressable>
     </View></View>
   </View>;
 }
 const s = StyleSheet.create({
   searchWrapper: { flex: 1, minWidth: 160, position: 'relative', zIndex: 40 },
-  suggestions: { position: 'absolute', top: '100%', marginTop: 8, left: 0, right: 0, borderWidth: 1, borderRadius: 14, padding: 8, boxShadow: '0px 10px 28px rgba(45, 25, 70, 0.16)' },
+  suggestions: { position: 'absolute', top: '100%', marginTop: 8, left: 0, right: 0, borderWidth: 1, borderRadius: 14, padding: 8, boxShadow: '0px 10px 28px rgba(24, 61, 105, 0.16)' },
   suggestionHeading: { fontSize: 9, letterSpacing: 1, fontWeight: '700', padding: 10 }, suggestionRow: { flexDirection: 'row', alignItems: 'center', gap: 10, borderRadius: 8, padding: 8 }, thumbnail: { width: 42, height: 42 }, allResults: { borderTopWidth: 1, padding: 13, marginTop: 6 },
-  utility: { paddingHorizontal: 28 }, utilityInner: { width: '100%', maxWidth: 1360, alignSelf: 'center', flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 9 }, utilityText: { color: '#F6EFFF', fontSize: 11 },
+  utility: { paddingHorizontal: 28 }, utilityInner: { width: '100%', maxWidth: 1360, alignSelf: 'center', flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 9 }, utilityText: { color: '#F0F7FF', fontSize: 11 },
   main: { width: '100%', maxWidth: 1360, alignSelf: 'center', flexDirection: 'row', alignItems: 'center', gap: 20, paddingHorizontal: 28, paddingVertical: 20 },
   brand: { flexDirection: 'row', alignItems: 'center', gap: 10 }, brandName: { fontSize: 27, fontWeight: '800', letterSpacing: -1 }, small: { fontSize: 11, lineHeight: 17 },
   search: { flex: 1, minWidth: 160, flexDirection: 'row', alignItems: 'center', borderWidth: 1, borderRadius: 12, padding: 5 }, input: { flex: 1, minWidth: 0, paddingHorizontal: 10, paddingVertical: 10, fontSize: 13 }, searchButton: { paddingHorizontal: 18, minHeight: 40, alignItems: 'center', justifyContent: 'center', borderRadius: 8 },
   action: { gap: 3, paddingVertical: 8, maxWidth: 140 }, actionText: { fontSize: 12, fontWeight: '700' }, iconAction: { alignItems: 'center', gap: 4, padding: 6 }, cart: { flexDirection: 'row', alignItems: 'center', gap: 10, borderRadius: 10, padding: 13 },
-  navBorder: { borderTopWidth: 1 }, nav: { width: '100%', maxWidth: 1360, alignSelf: 'center', paddingHorizontal: 28, flexDirection: 'row', alignItems: 'center', gap: 14, flexWrap: 'wrap' }, navLink: { paddingVertical: 17, borderBottomWidth: 2 }, category: { paddingVertical: 14 }, separator: { height: 18, width: 1, marginHorizontal: 2 }, menu: { minHeight: 44, justifyContent: 'center', paddingHorizontal: 4 },
+  navBorder: { borderTopWidth: 1 }, nav: { width: '100%', maxWidth: 1360, alignSelf: 'center', paddingHorizontal: 28, paddingVertical: 8, flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end', gap: 14 }, location: { minHeight: 44, flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 14, borderWidth: 1, borderRadius: 12 }, menu: { minHeight: 44, flexDirection: 'row', alignItems: 'center', gap: 8, justifyContent: 'center', paddingHorizontal: 12 },
 });
