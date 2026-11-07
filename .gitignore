@@ -14,7 +14,7 @@ server/node_modules/
 server/.env
 
 # Env files (local overrides)
-.env*.local
+
 
 # OS
 .DS_Store   
