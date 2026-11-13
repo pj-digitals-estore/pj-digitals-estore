@@ -12,7 +12,23 @@
     "icon": "./assets/icon.png",
     "plugins": [
       "expo-router",
-      "expo-status-bar"
+      "expo-status-bar",
+      "expo-secure-store",
+      [
+        "@clerk/expo",
+        {
+          "appleSignIn": false
+        }
+      ],
+      "expo-web-browser",
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Allow NearBy Shop to select product photos.",
+          "cameraPermission": false,
+          "microphonePermission": false
+        }
+      ]
     ],
     "slug": "tdpstore-shop",
     "version": "1.0.0",
@@ -27,4 +43,3 @@
     "name": "TDP Store Shop"
   }
 }
-
