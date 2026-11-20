@@ -1,9 +1,14 @@
+import { shopCategories } from '../../../../shared/categories';
+import { registerScreenBack } from '../../../../shared/mobile';
+import { groupSupermarketProducts, supermarketOffers } from './utils/supermarketProducts';
+import { useSavedAddresses } from './hooks/useSavedAddresses';
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { createCustomerOrder } from '@/services/orders';
 import BrandLogo from '@/components/BrandLogo';
 import { notify } from '@/lib/notifications';
 import { StatusBar } from 'expo-status-bar';
 import { LinearGradient } from 'expo-linear-gradient';
-import { Redirect, router, useLocalSearchParams, type Href } from 'expo-router';
+import { Redirect, router, usePathname, useLocalSearchParams, type Href } from 'expo-router';
 import { Animated, Easing, KeyboardAvoidingView, Modal, Platform, Pressable, RefreshControl, ScrollView, TextInput, TouchableOpacity, View, useWindowDimensions } from 'react-native';
 import WebStoreHeader from './components/WebStoreHeader';
 import { createWebStyles } from './styles/webStyles';
@@ -20,9 +25,9 @@ import PartnerRequest from './components/PartnerRequest';
 import CategoryMenu from './components/CategoryMenu';
 import OrderDetails from './components/OrderDetails';
 import type { PartnerDraft, PartnerRole } from './utils/partnerRequests';
-import { availableQuantity } from './utils/productOptions';
+import { availableQuantity, minimumOrderQuantity, minimumQuantityError } from './utils/productOptions';
 import PaymentSection, { type PaymentMethod } from './components/PaymentSection';
-import AddressBook, { type DeliveryAddress } from './components/AddressBook';
+import AddressBook from './components/AddressBook';
 import SearchSuggestions from './components/SearchSuggestions';
 import { useStoreTheme } from './ThemeContext';
 import { CategoryPicker, ProductGrid, StorePicker } from './components/ShopComponents';
@@ -36,16 +41,19 @@ import { useCustomerCart, type BasketLine } from './hooks/useCustomerCart';
 import { useCustomerOrders } from './hooks/useCustomerOrders';
 
 export default function StorefrontScreen() {
+  const pathname = usePathname();
   const { width } = useWindowDimensions();
   const desktop = Platform.OS === 'web' && width >= 900;
-  const { customer, signOut } = useCustomerAuth();
+  const { customer, signOut, getToken } = useCustomerAuth();
   const { checkout } = useLocalSearchParams<{ checkout?: string }>();
+  const tabHistory = useRef<Tab[]>([]);
   const [tab, setTabState] = useState<Tab>('Home');
   function setTab(next: Tab) {
     if (Platform.OS === 'web' && next === 'Account') {
       router.push('/account' as Href);
       return;
     }
+    if (next !== tab) tabHistory.current.push(tab);
     setTabState(next);
   }
   const pageScroll = useRef<ScrollView>(null);
@@ -58,12 +66,14 @@ export default function StorefrontScreen() {
   function continueToPayment() {
     if (!customer) { router.push({ pathname: '/signup', params: { returnTo: 'payment' } }); return; }
     if (!basket.synced || basket.busy) { notify('Wait for your saved cart to load, and resolve any cart errors before checkout.'); setTab('Cart'); return; }
+    const quantityError = minimumQuantityError(basket.lines);
+    if (quantityError) { notify(quantityError, 'error'); setTab('Cart'); return; }
     setTab('Payment'); pageScroll.current?.scrollTo({ y: 0, animated: false });
   }
 
   async function logout() {
     try { await signOut(); } catch { notify('Unable to sign out. Please try again.', 'error'); return; }
-    basket.discardGuest(); setFavorites([]); setAddresses([]); setPartnerDrafts({});
+    basket.discardGuest(); setFavorites([]); setPartnerDrafts({});
     setSelectedAddressId(null); setRecentViews([]);
     setAddressReturnTab('Home'); setSelectedProduct(null); setTab('Home');
     setDrawerOpen(false); drawerProgress.setValue(0);
@@ -91,11 +101,16 @@ export default function StorefrontScreen() {
   const orderFeed = useCustomerOrders(tab === 'Orders' || tab === 'History', refreshVersion);
   const { orders } = orderFeed;
   const [selectedOrder, setSelectedOrder] = useState<{ id: string; owner: string } | null>(null);
-  const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('UPI');
-  const [addresses, setAddresses] = useState<DeliveryAddress[]>([]);
-  const [selectedAddressId, setSelectedAddressId] = useState<string | null>(null);
+  const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('Cash on delivery');
+  const orderLock = useRef(false);
+  const [placingOrder, setPlacingOrder] = useState(false);
+  const savedAddresses = useSavedAddresses();
+  const { addresses } = savedAddresses;
+  const [selectedAddress, setSelectedAddress] = useState<{ owner: string; id: string } | null>(null);
+  const selectedAddressId = selectedAddress?.owner === customer?.id ? selectedAddress?.id ?? null : null;
+  function setSelectedAddressId(id: string | null) { setSelectedAddress(id && customer ? { owner: customer.id, id } : null); }
   const [addressReturnTab, setAddressReturnTab] = useState<Tab>('Home');
-  function useAddress(id: string) {
+  function selectAddress(id: string) {
     setSelectedAddressId(id);
     if (addressReturnTab === 'Payment') {
       setTab('Payment');
@@ -106,7 +121,7 @@ export default function StorefrontScreen() {
   const [sortBy, setSortBy] = useState<string>('Featured');
   const [storeId, setStoreId] = useState<StoreId>('all');
   const [category, setCategory] = useState<CategoryFilter>('All');
-  const [storeCategory, setStoreCategory] = useState<(typeof categories)[number]>('Electronics');
+  const [storeCategory, setStoreCategory] = useState<(typeof shopCategories)[number]>('Electronics');
   const [search, setSearch] = useState('');
   const [supermarketSearch, setSupermarketSearch] = useState('');
   const [supermarketCategory, setSupermarketCategory] = useState<(typeof categories)[number] | null>(null);
@@ -117,11 +132,23 @@ export default function StorefrontScreen() {
   const [detailLoading, setDetailLoading] = useState(false);
   const [detailError, setDetailError] = useState('');
   const detailRequest = useRef(0);
+  const supermarketAddLock = useRef(false);
+  useEffect(() => registerScreenBack(() => {
+    if (Platform.OS !== 'android' || pathname !== '/') return false;
+    if (locationOpen) { setLocationOpen(false); return true; }
+    if (drawerOpen) { setDrawerOpen(false); return true; }
+    if (selectedProduct) { setSelectedProduct(null); return true; }
+    if (selectedOrder) { setSelectedOrder(null); return true; }
+    if (tab !== 'Home') { setTabState(tabHistory.current.pop() ?? 'Home'); return true; }
+    tabHistory.current = [];
+    return false;
+  }), [drawerOpen, locationOpen, selectedProduct, selectedOrder, tab, pathname]);
+
   const getStore = (id: StoreId) => catalogue.shops.find(shop => shop.id === id) ?? products.find(product => product.store === id)?.shop ?? getFallbackStore(id);
   const locationShops = catalogue.shops.filter(shop => shop.location === deliveryLocation);
   const locationProducts = products.filter(product => !product.shop?.location || product.shop.location === deliveryLocation);
   const shopDataUnavailable = products.some(product => product.shopDataStatus === 'unavailable');
-  const deliveryAddress = addresses.find((address) => address.id === selectedAddressId && address.location === deliveryLocation);
+  const deliveryAddress = addresses.find((address) => address.id === selectedAddressId && address.location === deliveryLocation && !savedAddresses.error && !savedAddresses.loading);
 
   function openDrawer(): void {
     setDrawerOpen(true);
@@ -162,10 +189,34 @@ export default function StorefrontScreen() {
     if (product.sizes?.length && (selectedProduct?.id !== product.id || !selectedSize)) {
       void openProduct(product); notify('Choose a size before adding this item.'); return;
     }
+    if (supermarketAddLock.current) return;
+    const inCart = basket.lines.filter(line => line.product.id === product.id).reduce((sum, line) => sum + line.quantity, 0);
+    quantity = Math.max(quantity, minimumOrderQuantity(product.price) - inCart);
+    const supermarketPurchase = tab === 'Supermarket';
     try {
+      if (supermarketPurchase) {
+        supermarketAddLock.current = true;
+        let offer: Product | undefined;
+        for (const candidate of supermarketOffers(products, product)) {
+          const current = await catalogue.details(candidate.id);
+          const inCart = basket.lines.filter(line => line.product.id === current.id).reduce((sum, line) => sum + line.quantity, 0);
+          if ((current.stock ?? 0) > 5 && (current.stock ?? 0) >= inCart + quantity && (!selectedSize || current.sizes?.includes(selectedSize))) {
+            offer = current;
+            break;
+          }
+        }
+        if (!offer) throw new Error('No shop currently has more than 5 units and enough stock for this quantity.');
+        if (offer.price !== product.price) {
+          await openProduct(offer);
+          notify(`The available shop price is ${money(offer.price)}. Review the product before adding it.`);
+          return;
+        }
+        product = offer;
+      }
       await basket.add(product, product.sizes?.length ? selectedSize : undefined, quantity);
       notify(`${quantity} ${quantity === 1 ? 'item' : 'items'} added to your cart.`, 'success');
     } catch (cause) { notify(cause instanceof Error ? cause.message : 'Unable to add this item.', 'error'); }
+    finally { if (supermarketPurchase) supermarketAddLock.current = false; }
   }
   async function changeQuantity(line: BasketLine, difference: number) {
     try { await basket.change(line, difference); notify('Cart updated.', 'success'); }
@@ -186,19 +237,39 @@ export default function StorefrontScreen() {
 
   async function openProduct(product: Product): Promise<void> {
     const request = ++detailRequest.current;
-    setSelectedProduct(product); setSelectedSize(''); setSelectedQuantity(1); setDetailLoading(true); setDetailError('');
+    setSelectedProduct(product); setSelectedSize(''); setSelectedQuantity(Math.max(1, minimumOrderQuantity(product.price) - basket.lines.filter(line => line.product.id === product.id).reduce((sum, line) => sum + line.quantity, 0))); setDetailLoading(true); setDetailError('');
     pageScroll.current?.scrollTo({ y: 0, animated: false });
     try {
       const current = await catalogue.details(product.id);
       if (request !== detailRequest.current) return;
-      setSelectedProduct(item => item?.id === current.id ? current : item);
+      setSelectedProduct(item => item?.id === current.id ? (tab === 'Supermarket' && (current.stock ?? 0) <= 5 ? { ...current, stock: 0 } : current) : item);
       setRecentViews(items => [current, ...items.filter(item => item.id !== current.id)].slice(0, 8));
     } catch (cause) {
       if (request === detailRequest.current) setDetailError(cause instanceof Error ? cause.message : 'Unable to load product details.');
     } finally { if (request === detailRequest.current) setDetailLoading(false); }
   }
   function toggleFavorite(id: string): void { const saved = favorites.includes(id); setFavorites((items) => items.includes(id) ? items.filter((savedId) => savedId !== id) : [...items, id]); notify(saved ? 'Removed from wishlist.' : 'Added to wishlist.', 'success'); }
-  function placeDemoOrder(): void { notify('Ordering and payment APIs are not available yet. Your saved cart has not been changed.'); }
+  async function placeOrder() {
+    if (orderLock.current || placingOrder) return;
+    if (!customer || !deliveryAddress || !cartCount || !basket.synced || basket.busy) { notify('Sign in, select an address and wait for your saved cart before placing an order.', 'error'); return; }
+    const quantityError = minimumQuantityError(basket.lines);
+    if (quantityError) { notify(quantityError, 'error'); setTab('Cart'); return; }
+    if (paymentMethod !== 'Cash on delivery') return;
+    orderLock.current = true; setPlacingOrder(true);
+    try {
+      const token = await getToken();
+      if (!token) throw new Error('Please sign in again.');
+      const result = await createCustomerOrder({ paymentMethod: 'cod', shippingAddress: {
+        fullName: deliveryAddress.name, phone: deliveryAddress.phone, street: deliveryAddress.address,
+        city: deliveryAddress.location, state: 'Kerala', zipCode: deliveryAddress.pincode, country: 'India', location: deliveryAddress.location,
+      } }, token);
+      basket.reload(); orderFeed.reload(); setTab('Orders');
+      notify(`${result.orders.length === 1 ? 'Order placed' : 'Orders placed'}. Pay cash on delivery.`, 'success');
+    } catch (cause) {
+      basket.reload(); setTab('Orders'); orderFeed.reload();
+      notify(`${cause instanceof Error ? cause.message : 'Unable to confirm order.'} Check My orders before trying again.`, 'error');
+    } finally { orderLock.current = false; setPlacingOrder(false); }
+  }
 
   function renderHome() {
     return <>
@@ -217,9 +288,9 @@ export default function StorefrontScreen() {
       <View style={styles.sectionHeading}><Text style={styles.sectionTitle}>Start shopping</Text><Text style={styles.sectionHint}>Choose your path</Text></View>
       <View style={styles.homeStoreGrid}>
         <TouchableOpacity style={styles.homeStoreCard} onPress={() => { setSelectedProduct(null); setTab('Supermarket'); }} accessibilityRole="button" accessibilityLabel="Browse supermarket">
-          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10 }}>
-            <InterfaceIcon name="grid" size={22} color={palette.primaryText} />
-            <Text style={[styles.storeBlockName, { marginTop: 0, textAlign: 'center', flexShrink: 1 }]}>Supermarket</Text>
+          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
+            <InterfaceIcon name="grid" size={20} color={palette.primaryText} />
+            <Text numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.85} style={[styles.storeBlockName, { marginTop: 0, textAlign: 'center', flexShrink: 1 }]}>Supermarket</Text>
           </View>
         </TouchableOpacity>
         <TouchableOpacity style={styles.homeStoreCard} onPress={() => { setSelectedProduct(null); setStoreId('all'); setCategory('All'); setSearch(''); setTab('Shops'); }} accessibilityRole="button" accessibilityLabel="Browse shops by name">
@@ -251,7 +322,7 @@ export default function StorefrontScreen() {
         <View style={styles.searchBox}><Text style={styles.searchIcon}>⌕</Text><TextInput value={search} onChangeText={setSearch} placeholder="Search products..." placeholderTextColor={palette.muted} style={styles.searchInput} accessibilityLabel="Search products" returnKeyType="search" /><TouchableOpacity onPress={() => setSearch('')} accessibilityRole="button" accessibilityLabel="Clear search"><Text style={styles.clearSearch}>{search ? 'Clear' : ''}</Text></TouchableOpacity></View>
       <SearchSuggestions query={search} products={locationProducts.filter((product) => (storeId === 'all' || product.store === storeId) && (category === 'All' || product.category === category))} onSelect={setSearch} />
         <View style={styles.filterGroup}><Text style={styles.filterLabel}>STORE</Text><StorePicker styles={styles} stores={[stores[0], ...locationShops]} value={storeId} onChange={setStoreId} /></View>
-        <View style={styles.filterGroup}><Text style={styles.filterLabel}>CATEGORY</Text><CategoryPicker styles={styles} value={category} onChange={setCategory} options={categories} /></View>
+        <View style={styles.filterGroup}><Text style={styles.filterLabel}>CATEGORY</Text><CategoryPicker styles={styles} value={category} onChange={setCategory} options={shopCategories} /></View>
         <View style={styles.filterGroup}><Text style={styles.filterLabel}>SORT BY</Text><CategoryPicker styles={styles} value={sortBy} onChange={setSortBy} options={sortOptions} /></View>
       </View>
       <View style={styles.sectionHeading}><Text style={styles.sectionTitle}>{visibleProducts.length} products</Text><Text style={styles.sectionHint}>{storeId === 'all' ? 'All stores' : getStore(storeId).name}</Text></View>
@@ -261,11 +332,11 @@ export default function StorefrontScreen() {
 
   function renderSupermarket() {
     const query = supermarketSearch.trim().toLowerCase();
-    const categoryProducts = locationProducts.filter(product => supermarketCategory === null || product.category === supermarketCategory);
+    const categoryProducts = groupSupermarketProducts(products).filter(product => supermarketCategory === null || product.category === supermarketCategory);
     const results = categoryProducts.filter((product) => `${product.name} ${product.category}`.toLowerCase().includes(query));
     return <>
       <TouchableOpacity style={styles.backButton} onPress={() => { setSelectedProduct(null); setTab('Home'); pageScroll.current?.scrollTo({ y: 0, animated: false }); }} accessibilityRole="button" accessibilityLabel="Back to home"><Text style={styles.backButtonText}>← Back to Home</Text></TouchableOpacity>
-      <Text style={styles.pageTitle}>Supermarket</Text><Text style={styles.pageIntro}>Browse the products returned by the NearBy catalogue.</Text>
+      <Text style={styles.pageTitle}>Supermarket</Text><Text style={styles.pageIntro}>Browse products from shops in Thodupuzha and Muttom.</Text>
       <View style={styles.searchBox}>
         <Text style={styles.searchIcon}>⌕</Text>
         <TextInput value={supermarketSearch} onChangeText={setSupermarketSearch} placeholder="Search products or categories" placeholderTextColor={palette.muted} style={styles.searchInput} accessibilityLabel="Search supermarket products or categories" returnKeyType="search" autoCapitalize="none" />
@@ -284,19 +355,19 @@ export default function StorefrontScreen() {
       <View style={styles.storeTypePanel}>
         <Text style={styles.storeTypeLabel}>STORE TYPE</Text>
         <View style={styles.storeTypeRow}>
-          {categories.map((type) => <TouchableOpacity key={type} onPress={() => setStoreCategory(type)} style={[styles.storeTypeButton, { minWidth: 130 }, storeCategory === type && styles.storeTypeSelected]} accessibilityRole="button" accessibilityState={{ selected: storeCategory === type }}>
+          {shopCategories.map((type) => <TouchableOpacity key={type} onPress={() => setStoreCategory(type)} style={[styles.storeTypeButton, { minWidth: 130 }, storeCategory === type && styles.storeTypeSelected]} accessibilityRole="button" accessibilityState={{ selected: storeCategory === type }}>
             <Text style={[styles.storeTypeIcon, storeCategory === type && styles.storeTypeActiveText]}>{type === 'Bakery' ? '🥐' : type === 'Electronics' ? 'ϟ' : type === 'Computer Items' ? '▣' : type === 'Home Appliances' ? '⌂' : '▤'}</Text>
             <Text style={[styles.storeTypeText, storeCategory === type && styles.storeTypeActiveText]}>{type}</Text>
           </TouchableOpacity>)}
         </View>
       </View>
-      {locationShops.filter((store) => products.some((product) => product.store === store.id && product.category === storeCategory)).map((store) => {
+      {locationShops.filter((store) => products.some((product) => product.store === store.id && (store.category ?? product.category) === storeCategory)).map((store) => {
         const count = products.filter((product) => product.store === store.id).length;
         return <TouchableOpacity key={store.id} style={[styles.storeCard, storeId === store.id && styles.storeCardSelected]} onPress={() => openShop(store.id)} accessibilityRole="button">
           <Text style={styles.storeIcon}>{store.icon}</Text><View style={styles.storeCopy}><Text style={styles.storeName}>{store.name}</Text><Text style={styles.muted}>{store.area}</Text><Text style={styles.storeCount}>{count} products available  ·  Select store →</Text></View>
         </TouchableOpacity>;
       })}
-      {!locationShops.some((store) => products.some((product) => product.store === store.id && product.category === storeCategory)) ? <View style={styles.emptyState}><Text style={styles.emptyTitle}>{catalogue.loading ? 'Loading shops…' : catalogue.error || products.some(product => product.category === storeCategory && product.shopDataStatus === 'unavailable') ? 'Shop information unavailable' : `No ${storeCategory.toLowerCase()} shops listed`}</Text><Text style={styles.muted}>{catalogue.error || products.some(product => product.category === storeCategory && product.shopDataStatus === 'unavailable') ? 'The catalogue does not include complete seller and location details for these products.' : 'Try another store type or change your location.'}</Text></View> : null}
+      {!locationShops.some((store) => products.some((product) => product.store === store.id && (store.category ?? product.category) === storeCategory)) ? <View style={styles.emptyState}><Text style={styles.emptyTitle}>{catalogue.loading ? 'Loading shops…' : catalogue.error || products.some(product => (product.shop?.category ?? product.category) === storeCategory && product.shopDataStatus === 'unavailable') ? 'Shop information unavailable' : `No ${storeCategory.toLowerCase()} shops listed`}</Text><Text style={styles.muted}>{catalogue.error || products.some(product => (product.shop?.category ?? product.category) === storeCategory && product.shopDataStatus === 'unavailable') ? 'The catalogue does not include complete seller and location details for these products.' : 'Try another store type or change your location.'}</Text></View> : null}
     </>;
   }
 
@@ -309,7 +380,7 @@ export default function StorefrontScreen() {
       {cartItems.length === 0 ? <View style={styles.emptyState}><Text style={styles.emptyEmoji}>🛒</Text><Text style={styles.emptyTitle}>Your cart is waiting</Text><Text style={styles.muted}>Add something you love from the shop.</Text><TouchableOpacity style={styles.heroButton} onPress={goToShop}><Text style={styles.heroButtonText}>Browse products</Text></TouchableOpacity></View> : <>
         {cartItems.map((line) => <View key={line.key} style={styles.cartRow}>
           <View style={styles.cartArt}><ProductPhoto product={line.product} /></View>
-          <View style={styles.cartDetails}><Text style={styles.productName}>{line.product.name}</Text><Text style={styles.muted}>{money(line.price)} each{line.size ? ` · ${line.size}` : ''}</Text>
+          <View style={styles.cartDetails}><Text style={styles.productName}>{line.product.name}</Text><Text style={styles.muted}>{money(line.price)} each{line.size ? ` · ${line.size}` : ''}</Text><Text style={styles.muted}>Shop location: {line.product.shop?.location ?? 'Unavailable'}</Text>{line.price < 500 ? <Text style={styles.formNote}>Minimum 3 units per order. Decrease at the minimum to remove.</Text> : null}
             {line.pending ? <><Text style={styles.formNote}>Not saved — check your saved cart before adding again.</Text><TouchableOpacity onPress={() => basket.removePending(line)}><Text style={styles.backButtonText}>Remove guest copy</Text></TouchableOpacity></> : null}
           </View>
           <View style={styles.qtyBox}><TouchableOpacity disabled={basket.busy || line.pending} onPress={() => changeQuantity(line, -1)} style={styles.qtyButton} accessibilityLabel={`Remove one ${line.product.name}`}><Text style={styles.qtyButtonText}>−</Text></TouchableOpacity><Text style={styles.qtyText}>{line.quantity}</Text><TouchableOpacity disabled={basket.busy || line.pending} onPress={() => changeQuantity(line, 1)} style={styles.qtyButton} accessibilityLabel={`Add one ${line.product.name}`}><Text style={styles.qtyButtonText}>+</Text></TouchableOpacity></View>
@@ -345,7 +416,7 @@ export default function StorefrontScreen() {
 
   function renderAccount() { return Platform.OS === 'web' ? <Redirect href={'/account' as Href} /> : <><Text style={styles.pageTitle}>Account settings</Text><Text style={styles.pageIntro}>Your profile and sign-in preferences.</Text><AccountSettings /></>; }
 
-  function renderCustomerCare() { return <><Text style={styles.pageTitle}>Customer care</Text><Text style={styles.pageIntro}>Help for this demo store.</Text><View style={styles.menuCard}><View><Text style={styles.storeName}>Where is my order?</Text><Text style={styles.muted}>See My Orders after demo checkout.</Text></View></View><View style={styles.menuCard}><View><Text style={styles.storeName}>Can I pay online?</Text><Text style={styles.muted}>Checkout is a demo and takes no payment.</Text></View></View><Text style={styles.formNote}>Add a real support contact before publishing.</Text></>; }
+  function renderCustomerCare() { return <><Text style={styles.pageTitle}>Customer care</Text><Text style={styles.pageIntro}>Share feedback or report an issue with NearBy.</Text>{([{ kind: 'feedback', label: 'Send feedback', copy: 'Tell us what is working and what we can improve.' }, { kind: 'problem', label: 'Report a problem', copy: 'Let support know about an app issue.' }] as const).map(item => <TouchableOpacity key={item.kind} accessibilityRole="button" style={styles.menuCard} onPress={() => router.push({ pathname: '/support', params: { kind: item.kind } } as Href)}><View style={{ flex: 1 }}><Text style={styles.storeName}>{item.label}</Text><Text style={styles.muted}>{item.copy}</Text></View><Text style={styles.menuArrow}>›</Text></TouchableOpacity>)}</>; }
 
   function renderMore() {
     const sections: Array<{ icon: string; title: string; tab: Tab }> = [
@@ -370,9 +441,10 @@ export default function StorefrontScreen() {
     if (!product) return null;
     const inCart = basket.lines.filter(line => line.product.id === product.id).reduce((sum, line) => sum + line.quantity, 0);
     const remaining = availableQuantity(product.stock, inCart);
-    const quantity = Math.min(selectedQuantity, Math.max(1, remaining));
-    const unavailable = remaining === 0 || basket.busy || detailLoading || !!detailError;
-    if (getStore(product.store).location && getStore(product.store).location !== deliveryLocation) return <>
+    const minimum = Math.max(1, minimumOrderQuantity(product.price) - inCart);
+    const quantity = Math.max(minimum, Math.min(selectedQuantity, Math.max(1, remaining)));
+    const unavailable = remaining < minimum || basket.busy || detailLoading || !!detailError;
+    if (tab !== 'Supermarket' && getStore(product.store).location && getStore(product.store).location !== deliveryLocation) return <>
       <Text style={styles.pageTitle}>{product.name}</Text>
       <View style={styles.emptyState}><Text style={styles.emptyTitle}>Unavailable in {deliveryLocation.split(',')[0]}</Text><Text style={styles.muted}>This item is sold by a shop in {getStore(product.store).location}. Change location to view it again.</Text><TouchableOpacity style={styles.secondaryButton} onPress={() => setSelectedProduct(null)} accessibilityRole="button"><Text style={styles.secondaryButtonText}>Back to browsing</Text></TouchableOpacity></View>
     </>;
@@ -396,9 +468,10 @@ export default function StorefrontScreen() {
       {product.sizes?.length ? <><Text style={styles.inputLabel}>CHOOSE SIZE</Text><CategoryPicker styles={styles} value={selectedSize} onChange={setSelectedSize} options={product.sizes} /></> : null}
       <View style={{ marginVertical: 18, gap: 10 }}>
         <Text style={styles.inputLabel}>QUANTITY</Text>
+        {product.price < 500 ? <Text style={styles.formNote}>Minimum 3 units per product per order for items below ₹500.</Text> : null}
         <View style={{ flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 14 }}>
           <View style={styles.qtyBox}>
-            <TouchableOpacity disabled={unavailable || quantity <= 1} onPress={() => setSelectedQuantity(quantity - 1)} accessibilityRole="button" accessibilityLabel="Decrease quantity" style={[styles.qtyButton, { width: 44, height: 44, opacity: unavailable || quantity <= 1 ? 0.4 : 1 }]}><Text style={styles.qtyButtonText}>−</Text></TouchableOpacity>
+            <TouchableOpacity disabled={unavailable || quantity <= minimum} onPress={() => setSelectedQuantity(quantity - 1)} accessibilityRole="button" accessibilityLabel="Decrease quantity" style={[styles.qtyButton, { width: 44, height: 44, opacity: unavailable || quantity <= minimum ? 0.4 : 1 }]}><Text style={styles.qtyButtonText}>−</Text></TouchableOpacity>
             <Text accessibilityLiveRegion="polite" accessibilityLabel={`Quantity ${quantity}`} style={[styles.qtyText, { minWidth: 28, textAlign: 'center', fontSize: 16 }]}>{quantity}</Text>
             <TouchableOpacity disabled={unavailable || quantity >= remaining} onPress={() => setSelectedQuantity(quantity + 1)} accessibilityRole="button" accessibilityLabel="Increase quantity" style={[styles.qtyButton, { width: 44, height: 44, opacity: unavailable || quantity >= remaining ? 0.4 : 1 }]}><Text style={styles.qtyButtonText}>+</Text></TouchableOpacity>
           </View>
@@ -459,7 +532,7 @@ export default function StorefrontScreen() {
         {!catalogue.error && !catalogue.loading && !products.length ? <Text style={styles.formNote}>No products have been published yet.</Text> : null}
         {products.length ? <Text style={styles.formNote}>Shop and delivery coverage have not been supplied for these products.</Text> : null}
         <Text accessibilityLabel={`${pageTitle} page`} style={styles.srOnly}>{pageTitle}</Text>
-        {selectedProduct ? renderDetails() : tab === 'Home' ? renderHome() : tab === 'Shop' ? renderShop() : tab === 'Supermarket' ? renderSupermarket() : tab === 'Shops' ? renderStores() : tab === 'Cart' ? renderCart() : tab === 'Addresses' ? <AddressBook addresses={addresses} selectedId={selectedAddressId} location={deliveryLocation} onSave={(address) => { setAddresses((current) => [...current, address]); useAddress(address.id); }} onSelect={useAddress} onRemove={(id) => { setAddresses((current) => current.filter((address) => address.id !== id)); if (selectedAddressId === id) setSelectedAddressId(null); }} onBack={() => setTab(addressReturnTab)} /> : tab === 'Payment' && customer ? <PaymentSection address={deliveryAddress} onManageAddress={() => { setAddressReturnTab('Payment'); setTab('Addresses'); }} subtotal={subtotal} itemCount={cartCount} location={deliveryLocation} method={paymentMethod} onChange={setPaymentMethod} onBack={() => setTab('Cart')} onConfirm={placeDemoOrder} canOrder={false} /> : tab === 'Favorites' ? renderFavorites() : tab === 'Orders' ? renderOrders() : tab === 'History' ? renderHistory() : tab === 'Account' ? renderAccount() : tab === 'Customer Care' ? renderCustomerCare() : tab === 'Shop request' ? renderPartnerRequest('shop') : tab === 'Delivery request' ? renderPartnerRequest('delivery') : renderMore()}
+        {selectedProduct ? renderDetails() : tab === 'Home' ? renderHome() : tab === 'Shop' ? renderShop() : tab === 'Supermarket' ? renderSupermarket() : tab === 'Shops' ? renderStores() : tab === 'Cart' ? renderCart() : tab === 'Addresses' ? <AddressBook addresses={addresses} selectedId={selectedAddressId} location={deliveryLocation} onSave={async address => { const saved = await savedAddresses.save(address); notify('Address saved.', 'success'); selectAddress(saved.id); }} busy={savedAddresses.busy} loading={savedAddresses.loading} loadError={customer ? savedAddresses.error : 'Sign in to save and view your addresses.'} onReload={savedAddresses.reload} onSignIn={!customer ? () => router.push('/login') : undefined} onSelect={selectAddress} onRemove={async id => { await savedAddresses.remove(id); notify('Address removed.', 'success'); if (selectedAddressId === id) setSelectedAddressId(null); }} onBack={() => setTab(addressReturnTab)} /> : tab === 'Payment' && customer ? <PaymentSection items={cartItems} address={deliveryAddress} onManageAddress={() => { setAddressReturnTab('Payment'); setTab('Addresses'); }} subtotal={subtotal} itemCount={cartCount} location={deliveryLocation} method={paymentMethod} onChange={setPaymentMethod} onBack={() => setTab('Cart')} onConfirm={() => void placeOrder()} canOrder={paymentMethod === 'Cash on delivery' && basket.synced && !basket.busy} busy={placingOrder} /> : tab === 'Favorites' ? renderFavorites() : tab === 'Orders' ? renderOrders() : tab === 'History' ? renderHistory() : tab === 'Account' ? renderAccount() : tab === 'Customer Care' ? renderCustomerCare() : tab === 'Shop request' ? renderPartnerRequest('shop') : tab === 'Delivery request' ? renderPartnerRequest('delivery') : renderMore()}
         {desktop ? <View style={{ marginTop: 56, paddingTop: 30, paddingBottom: 12, borderTopWidth: 1, borderColor: palette.border, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', gap: 32 }}>
           <View style={{ maxWidth: 360 }}><View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}><BrandLogo size={48} /><Text style={styles.brand}>NearBy</Text></View><Text style={[styles.pageIntro, { marginTop: 12 }]}>Your town. Your shops. Your doorstep.</Text><Text style={styles.muted}>Shopping local in {deliveryLocation}.</Text></View>
           <View style={{ gap: 14 }}><Text style={styles.storeName}>Explore</Text>{([{ label: 'Supermarket', target: 'Supermarket' }, { label: 'Shop by name', target: 'Shops' }, { label: 'Wishlist', target: 'Favorites' }] as const).map(link => <TouchableOpacity key={link.target} accessibilityRole="button" onPress={() => { setSelectedProduct(null); setTab(link.target); pageScroll.current?.scrollTo({ y: 0, animated: false }); }}><Text style={styles.changeLink}>{link.label}</Text></TouchableOpacity>)}</View>
@@ -482,7 +555,7 @@ export default function StorefrontScreen() {
         <Animated.View style={[styles.drawer, { transform: [{ translateX: drawerTranslateX }] }]}>
           <View style={styles.drawerHeader}><View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}><BrandLogo size={38} /><View><Text style={styles.drawerBrand}>NearBy</Text><Text style={styles.drawerSub}>THODUPUZHA · KERALA</Text></View></View><TouchableOpacity onPress={closeDrawer} style={styles.drawerClose} accessibilityRole="button" accessibilityLabel="Close navigation menu"><Text style={styles.drawerCloseText}>×</Text></TouchableOpacity></View>
           <ScrollView style={{ flex: 1, minHeight: 0 }} contentContainerStyle={{ paddingBottom: 16 }} showsVerticalScrollIndicator keyboardShouldPersistTaps="handled">
-          <View style={styles.drawerDelivery}><Text style={styles.drawerDeliveryIcon}>◷</Text><Text style={styles.drawerDeliveryText}>Delivery within 12 hours</Text></View>
+          <View style={styles.drawerDelivery}><Text style={styles.drawerDeliveryIcon}>◷</Text><Text style={styles.drawerDeliveryText}>Delivery within 24 hours</Text></View>
           <TouchableOpacity style={styles.drawerAuth} onPress={() => { closeDrawer(); if (customer) { setSelectedProduct(null); setTab('Account'); } else router.push('/login' as Href); }} accessibilityRole="button"><Text style={styles.drawerAuthKicker}>NearBy ACCOUNT</Text><Text style={styles.drawerAuthText}>{customer ? customer.name : 'Sign in or create account  →'}</Text></TouchableOpacity>
           {primaryDrawerLinks.map((item) => <TouchableOpacity key={item.tab} style={[styles.drawerItem, tab === item.tab && styles.drawerItemActive]} onPress={() => chooseTab(item.tab)} accessibilityRole="button" accessibilityState={{ selected: tab === item.tab }}><Text style={[styles.drawerItemIcon, tab === item.tab && styles.drawerItemTextActive]}>{item.icon}</Text><Text style={[styles.drawerItemText, tab === item.tab && styles.drawerItemTextActive]}>{item.label}</Text></TouchableOpacity>)}
           <View style={styles.drawerDivider} /><Text style={styles.drawerSectionLabel}>YOUR NearBy</Text>
@@ -490,6 +563,7 @@ export default function StorefrontScreen() {
             {(['light', 'dark'] as const).map((option) => <TouchableOpacity key={option} onPress={() => setMode(option)} accessibilityRole="button" accessibilityLabel={`${option} mode`} accessibilityState={{ selected: mode === option }} style={[styles.storeTypeButton, mode === option && styles.storeTypeSelected]}><Text style={[styles.storeTypeText, mode === option && styles.storeTypeActiveText]}>{option === 'light' ? '☀ Light' : '☾ Dark'}</Text></TouchableOpacity>)}
           </View>
           {accountDrawerLinks.map((item) => <TouchableOpacity key={item.tab} style={[styles.drawerItem, tab === item.tab && styles.drawerItemActive]} onPress={() => chooseTab(item.tab)} accessibilityRole="button" accessibilityState={{ selected: tab === item.tab }}><Text style={[styles.drawerItemIcon, tab === item.tab && styles.drawerItemTextActive]}>{item.icon}</Text><Text style={[styles.drawerItemText, tab === item.tab && styles.drawerItemTextActive]}>{item.label}</Text></TouchableOpacity>)}
+          {(['feedback', 'problem'] as const).map(kind => <TouchableOpacity key={kind} accessibilityRole="button" style={styles.drawerItem} onPress={() => { closeDrawer(); router.push({ pathname: '/support', params: { kind } } as Href); }}><Text style={styles.drawerItemIcon}>{kind === 'feedback' ? '✎' : '!'}</Text><Text style={styles.drawerItemText}>{kind === 'feedback' ? 'Feedback' : 'Report a problem'}</Text></TouchableOpacity>)}
           <View style={styles.drawerDivider} /><Text style={styles.drawerSectionLabel}>JOB with NearBy</Text>
           {partnerDrawerLinks.map(item => <TouchableOpacity key={item.tab} style={[styles.drawerItem, tab === item.tab && styles.drawerItemActive]} onPress={() => chooseTab(item.tab)} accessibilityRole="button" accessibilityState={{ selected: tab === item.tab }}><Text style={[styles.drawerItemIcon, tab === item.tab && styles.drawerItemTextActive]}>{item.icon}</Text><Text style={[styles.drawerItemText, tab === item.tab && styles.drawerItemTextActive]}>{item.label}</Text></TouchableOpacity>)}
           </ScrollView>

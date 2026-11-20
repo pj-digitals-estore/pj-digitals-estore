@@ -1,3 +1,4 @@
+import BrandLogo from '@/components/BrandLogo';
 import { useEffect, useRef, useState } from 'react';
 import { useHostedAuth } from '@clerk/expo/hosted-auth';
 import { useSession } from '@clerk/expo';
@@ -20,14 +21,15 @@ export default function HostedAuthScreen({ mode }: { mode: 'login' | 'signup' })
   const opened = useRef(false);
   useEffect(() => { mounted.current = true; return () => { mounted.current = false; }; }, []);
   const checkout = returnTo === 'payment';
+  const support = returnTo === 'support';
   useEffect(() => {
-    if (session?.status === 'active') router.dismissTo(checkout ? { pathname: '/', params: { checkout: 'payment' } } : '/');
-  }, [session?.status, checkout]);
+    if (session?.status === 'active') router.dismissTo(checkout ? { pathname: '/', params: { checkout: 'payment' } } : support ? '/support' : '/');
+  }, [session?.status, checkout, support]);
 
   async function openClerk() {
     if (pending.current) return;
     pending.current = true; setBusy(true); setMessage('');
-    beginHostedAuthFlow(checkout);
+    beginHostedAuthFlow(checkout, support);
     try {
       const result = await startHostedAuth({ mode: mode === 'signup' ? 'sign-up' : 'sign-in' });
       const error = result.createdSessionId ? '' : result.authSessionResult?.type === 'cancel' || result.authSessionResult?.type === 'dismiss'
@@ -51,6 +53,9 @@ export default function HostedAuthScreen({ mode }: { mode: 'login' | 'signup' })
 
   return <View style={{ flex: 1, padding: 24, justifyContent: 'center', backgroundColor: palette.background }}>
     <View style={{ width: '100%', maxWidth: 440, alignSelf: 'center', gap: 20, alignItems: 'center' }}>
+      <BrandLogo size={64} />
+      <Text style={{ color: palette.primaryText, fontSize: 11, fontWeight: '600', letterSpacing: 1.2 }}>NEARBY · CUSTOMER</Text>
+      <Text style={{ color: palette.text, fontSize: 30, fontWeight: '600', letterSpacing: -0.8, lineHeight: 38, textAlign: 'center' }}>{mode === 'login' ? 'Welcome back.' : 'Create your account.'}</Text>
       {busy || !ready ? <ActivityIndicator color={palette.primary} accessibilityLabel="Opening Clerk login" /> : null}
       {message ? <Text accessibilityLiveRegion="polite" style={{ color: palette.primaryText, textAlign: 'center', lineHeight: 20 }}>{message}</Text> : null}
       {!busy && ready ? <Pressable onPress={openClerk} accessibilityRole="button" style={{ padding: 16 }}><Text style={{ color: palette.primaryText, fontWeight: '800' }}>Reopen Clerk login</Text></Pressable> : null}
