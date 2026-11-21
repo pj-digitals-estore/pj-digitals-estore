@@ -4,7 +4,7 @@ import { AD_PLACEMENTS, AD_STATUSES, SERVICE_LOCATIONS } from "../types/index.js
 import Shop from "../models/Shop.js";
 import Product from "../models/Products.js";
 import { sendError } from "../utils/http.js";
-import { destroyImages, uploadToCloudinary } from "../utils/cloudinaryUpload.js";
+import { destroyImages, uploadImage } from "../utils/imageStore.js";
 import { notify, notifyAdmins } from "../utils/notify.js";
 import { logActivity } from "../utils/activity.js";
 
@@ -142,7 +142,7 @@ export const createAd = async (req: Request, res: Response) => {
     }
 
     const file = req.file as Express.Multer.File | undefined;
-    if (file) image = (await uploadToCloudinary(file, "pj-digitals-estore/ads")).secure_url;
+    if (file) image = (await uploadImage(file, "pj-digitals-estore/ads")).secure_url;
 
     if (product && !(await Product.exists({ _id: product, shop: req.shop._id }))) {
       return res.status(400).json({ success: false, message: "That product doesn't belong to your shop" });
@@ -208,7 +208,7 @@ export const updateAd = async (req: Request, res: Response) => {
     const file = req.file as Express.Multer.File | undefined;
     const oldImage = ad.image;
     if (file) {
-      newImage = (await uploadToCloudinary(file, "pj-digitals-estore/ads")).secure_url;
+      newImage = (await uploadImage(file, "pj-digitals-estore/ads")).secure_url;
       ad.image = newImage;
     }
 
@@ -353,7 +353,7 @@ export const adminCreateAd = async (req: Request, res: Response) => {
     }
 
     const file = req.file as Express.Multer.File | undefined;
-    if (file) image = (await uploadToCloudinary(file, "pj-digitals-estore/ads")).secure_url;
+    if (file) image = (await uploadImage(file, "pj-digitals-estore/ads")).secure_url;
 
     const ad = await Advertisement.create({
       shop: shop._id,
@@ -418,7 +418,7 @@ export const adminUpdateAd = async (req: Request, res: Response) => {
     const file = req.file as Express.Multer.File | undefined;
     const oldImage = ad.image;
     if (file) {
-      newImage = (await uploadToCloudinary(file, "pj-digitals-estore/ads")).secure_url;
+      newImage = (await uploadImage(file, "pj-digitals-estore/ads")).secure_url;
       ad.image = newImage;
     }
     await ad.save();

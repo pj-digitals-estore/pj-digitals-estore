@@ -5,7 +5,7 @@ import Order from "../models/Order.js";
 import Shop from "../models/Shop.js";
 import { SERVICE_LOCATIONS, VEHICLE_TYPES } from "../types/index.js";
 import { sendError } from "../utils/http.js";
-import { destroyImages, uploadToCloudinary } from "../utils/cloudinaryUpload.js";
+import { destroyImages, uploadImage } from "../utils/imageStore.js";
 import { notify, notifyAdmins } from "../utils/notify.js";
 import { transitionOrder } from "../utils/orderHelpers.js";
 import { getSettings } from "../utils/settings.js";
@@ -51,7 +51,7 @@ export const applyAsDriver = async (req: Request, res: Response) => {
     }
 
     const file = req.file as Express.Multer.File | undefined;
-    if (file) photo = (await uploadToCloudinary(file, "pj-digitals-estore/drivers")).secure_url;
+    if (file) photo = (await uploadImage(file, "pj-digitals-estore/drivers")).secure_url;
 
     const data: Record<string, any> = {};
     for (const f of PROFILE_FIELDS) if (req.body[f] !== undefined) data[f] = req.body[f];
@@ -95,7 +95,7 @@ export const updateMyProfile = async (req: Request, res: Response) => {
     const file = req.file as Express.Multer.File | undefined;
     const oldPhoto = driver.photo;
     if (file) {
-      newPhoto = (await uploadToCloudinary(file, "pj-digitals-estore/drivers")).secure_url;
+      newPhoto = (await uploadImage(file, "pj-digitals-estore/drivers")).secure_url;
       driver.photo = newPhoto;
     }
     await driver.save();

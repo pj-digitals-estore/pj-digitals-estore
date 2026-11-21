@@ -3,7 +3,7 @@ import Product from "../models/Products.js";
 import Shop from "../models/Shop.js";
 import { PRODUCT_CATEGORIES } from "../types/index.js";
 import { escapeRegex, sendError } from "../utils/http.js";
-import { destroyImages, uploadToCloudinary } from "../utils/cloudinaryUpload.js";
+import { destroyImages, ImageError, uploadImage } from "../utils/imageStore.js";
 
 // --------------------------------------------------
 // HELPERS
@@ -231,7 +231,7 @@ export const createProduct = async (req: Request, res: Response) => {
       if (req.body.isFeatured !== undefined) data.isFeatured = req.body.isFeatured;
     }
 
-    const uploaded = await Promise.all(files.map((f) => uploadToCloudinary(f)));
+    const uploaded = await Promise.all(files.map((f) => uploadImage(f)));
     images = uploaded.map((r) => r.secure_url);
 
     const product = await Product.create({
@@ -244,12 +244,8 @@ export const createProduct = async (req: Request, res: Response) => {
   } catch (error: any) {
     if (images.length) await destroyImages(images);
 
-    if (error.http_code) {
-      console.error("CLOUDINARY ERROR:", error.message);
-      return res.status(502).json({
-        success: false,
-        message: `Image upload failed: ${error.message}`,
-      });
+    if (error instanceof ImageError) {
+      return res.status(400).json({ success: false, message: error.message });
     }
     sendError(res, error, "Failed to create product");
   }
@@ -292,7 +288,7 @@ export const updateProduct = async (req: Request, res: Response) => {
     }
 
     if (files.length > 0) {
-      const uploaded = await Promise.all(files.map((f) => uploadToCloudinary(f)));
+      const uploaded = await Promise.all(files.map((f) => uploadImage(f)));
       newImages = uploaded.map((r) => r.secure_url);
     }
 
@@ -325,12 +321,8 @@ export const updateProduct = async (req: Request, res: Response) => {
   } catch (error: any) {
     if (newImages.length) await destroyImages(newImages);
 
-    if (error.http_code) {
-      console.error("CLOUDINARY ERROR:", error.message);
-      return res.status(502).json({
-        success: false,
-        message: `Image upload failed: ${error.message}`,
-      });
+    if (error instanceof ImageError) {
+      return res.status(400).json({ success: false, message: error.message });
     }
     sendError(res, error, "Failed to update product");
   }
