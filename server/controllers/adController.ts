@@ -148,6 +148,10 @@ export const createAd = async (req: Request, res: Response) => {
       return res.status(400).json({ success: false, message: "That product doesn't belong to your shop" });
     }
 
+    if (product && !(await Product.exists({ _id: product, shop: req.shop._id }))) {
+      return res.status(400).json({ success: false, message: "That product doesn't belong to your shop" });
+    }
+
     const draft = req.body.draft === true || req.body.draft === "true";
     const ad = await Advertisement.create({
       shop: req.shop._id,
