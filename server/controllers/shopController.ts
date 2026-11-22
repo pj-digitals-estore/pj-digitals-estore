@@ -5,7 +5,7 @@ import Order from "../models/Order.js";
 import Settlement from "../models/Settlement.js";
 import { ORDER_STATUSES, SERVICE_LOCATIONS } from "../types/index.js";
 import { escapeRegex, sendError } from "../utils/http.js";
-import { destroyImages, uploadToCloudinary } from "../utils/cloudinaryUpload.js";
+import { destroyImages, uploadImage } from "../utils/imageStore.js";
 import { attachDeliveries, transitionOrder } from "../utils/orderHelpers.js";
 import { notify, notifyAdmins } from "../utils/notify.js";
 import { getSettings } from "../utils/settings.js";
@@ -146,7 +146,7 @@ export const applyForShop = async (req: Request, res: Response) => {
     }
 
     const file = req.file as Express.Multer.File | undefined;
-    if (file) logo = (await uploadToCloudinary(file, "pj-digitals-estore/shops")).secure_url;
+    if (file) logo = (await uploadImage(file, "pj-digitals-estore/shops")).secure_url;
 
     const shop = await Shop.create({
       ...data,
@@ -194,7 +194,7 @@ export const updateMyShop = async (req: Request, res: Response) => {
 
     const file = req.file as Express.Multer.File | undefined;
     if (file) {
-      newLogo = (await uploadToCloudinary(file, "pj-digitals-estore/shops")).secure_url;
+      newLogo = (await uploadImage(file, "pj-digitals-estore/shops")).secure_url;
       updates.logo = newLogo;
     }
 

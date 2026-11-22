@@ -8,7 +8,7 @@ import DeliveryPartner from "../models/DeliveryPartner.js";
 import Advertisement from "../models/Advertisement.js";
 import { PAYMENT_STATUSES, SERVICE_LOCATIONS, SHOP_STATUSES, PARTNER_STATUSES, VEHICLE_TYPES } from "../types/index.js";
 import { HttpError, round2, sendError } from "../utils/http.js";
-import { destroyImages, uploadToCloudinary } from "../utils/cloudinaryUpload.js";
+import { destroyImages, uploadImage } from "../utils/imageStore.js";
 import { notify } from "../utils/notify.js";
 import { logActivity } from "../utils/activity.js";
 import { setUserRole } from "../utils/roles.js";
@@ -83,7 +83,7 @@ export const adminCreateShop = async (req: Request, res: Response) => {
     }
 
     const file = req.file as Express.Multer.File | undefined;
-    if (file) logo = (await uploadToCloudinary(file, "pj-digitals-estore/shops")).secure_url;
+    if (file) logo = (await uploadImage(file, "pj-digitals-estore/shops")).secure_url;
 
     const shop: any = await Shop.create({
       ...data,
@@ -155,7 +155,7 @@ export const adminUpdateShop = async (req: Request, res: Response) => {
     const file = req.file as Express.Multer.File | undefined;
     const oldLogo = shop.logo;
     if (file) {
-      newLogo = (await uploadToCloudinary(file, "pj-digitals-estore/shops")).secure_url;
+      newLogo = (await uploadImage(file, "pj-digitals-estore/shops")).secure_url;
       shop.logo = newLogo;
     }
     await shop.save();
@@ -222,7 +222,7 @@ export const adminCreateDriver = async (req: Request, res: Response) => {
     for (const f of DRIVER_FIELDS) if (req.body[f] !== undefined) data[f] = req.body[f];
     if (req.body.payout) data.payout = (({ bankName, ...r }: any) => r)(cleanPayoutAccount(req.body.payout));
     const file = req.file as Express.Multer.File | undefined;
-    if (file) photo = (await uploadToCloudinary(file, "pj-digitals-estore/drivers")).secure_url;
+    if (file) photo = (await uploadImage(file, "pj-digitals-estore/drivers")).secure_url;
 
     const driver: any = await DeliveryPartner.create({
       ...data,
@@ -271,7 +271,7 @@ export const adminUpdateDriver = async (req: Request, res: Response) => {
     const file = req.file as Express.Multer.File | undefined;
     const oldPhoto = driver.photo;
     if (file) {
-      newPhoto = (await uploadToCloudinary(file, "pj-digitals-estore/drivers")).secure_url;
+      newPhoto = (await uploadImage(file, "pj-digitals-estore/drivers")).secure_url;
       driver.photo = newPhoto;
     }
     await driver.save();

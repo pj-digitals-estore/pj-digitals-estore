@@ -25,6 +25,7 @@ import {
 } from "./routes/miscRoutes.js";
 import { errorHandler, notFound } from "./middleware/validate.js";
 import { health, healthDetails } from "./controllers/healthController.js";
+import { MEDIA_DIR } from "./utils/imageStore.js";
 import { alertOps, errorText, escapeHtml, sendTelegram } from "./utils/telegram.js";
 
 // A crash is restarted by Docker; tell the owner first (Telegram is a no-op when not configured).
@@ -63,6 +64,25 @@ app.get("/", (_req: Request, res: Response) => {
 });
 app.get("/health", health); // 200 only if the API and MongoDB both answer, else 503
 app.get("/health/details", healthDetails); // needs header x-health-token (HEALTH_TOKEN)
+
+// Own image storage: files are named by random id and never change, so cache them for a year.
+// Registered before Clerk so image requests never go through authentication.
+app.use(
+  "/media",
+  express.static(MEDIA_DIR, {
+    maxAge: "365d",
+    immutable: true,
+    index: false,
+    dotfiles: "ignore",
+    setHeaders: (res) => {
+      res.setHeader("Cross-Origin-Resource-Policy", "cross-origin");
+      res.setHeader("X-Content-Type-Options", "nosniff");
+    },
+  }),
+  (_req: Request, res: Response) => {
+    res.status(404).end();
+  },
+);
 
 app.use(express.json({ limit: "1mb" }));
 app.use(clerkMiddleware());
