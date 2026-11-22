@@ -1,6 +1,6 @@
 import "dotenv/config";
 import { randomUUID } from "node:crypto";
-import { mkdir, rm, writeFile } from "node:fs/promises";
+import { copyFile, mkdir, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import sharp from "sharp";
 
@@ -122,5 +122,27 @@ const destroyLegacyCloudinary = async (url: string) => {
     await legacy([url]);
   } catch (e) {
     console.error("Legacy Cloudinary delete skipped:", (e as Error).message);
+  }
+};
+
+/** Make an independent copy of one of OUR images (all 3 sizes). Returns null if it is not ours / missing. */
+export const cloneImage = async (image: unknown, folder = "products"): Promise<string | null> => {
+  const key = keyFromUrl(image);
+  if (!key) return null;
+  const dir = cleanFolder(folder);
+  const id = randomUUID();
+  const done: string[] = [];
+  try {
+    await mkdir(path.join(MEDIA_DIR, dir), { recursive: true });
+    const from = key.replace(/\.webp$/, "");
+    for (const s of SIZES) {
+      const dest = path.join(MEDIA_DIR, dir, `${id}${s.suffix}.webp`);
+      await copyFile(path.join(MEDIA_DIR, `${from}${s.suffix}.webp`), dest);
+      done.push(dest);
+    }
+    return `${MEDIA_BASE}/${dir}/${id}.webp`;
+  } catch {
+    await Promise.all(done.map((f) => rm(f, { force: true })));
+    return null;
   }
 };

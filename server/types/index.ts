@@ -143,6 +143,11 @@ export interface IProduct extends Document {
   description: string;
   price: number;
   comparePrice?: number;
+  costPrice?: number;
+  barcode?: string;
+  sku?: string;
+  brand?: string;
+  unit?: string;
   images: string[];
   sizes: string[];
   category: ProductCategory;

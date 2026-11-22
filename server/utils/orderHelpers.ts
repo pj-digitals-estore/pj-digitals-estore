@@ -3,6 +3,7 @@ import Order from "../models/Order.js";
 import Delivery from "../models/Delivery.js";
 import { IOrder, OrderStatus } from "../types/index.js";
 import { HttpError } from "./http.js";
+import { logMovements } from "./stockLog.js";
 
 export const generateOrderNumber = () =>
   "ORD-" +
@@ -15,12 +16,15 @@ export const generateCheckoutId = () =>
 
 type StockLine = { product: any; quantity: number };
 
-export const restoreStockLines = async (lines: StockLine[]) => {
+export const restoreStockLines = async (lines: StockLine[], opts: { log?: boolean } = {}) => {
   await Promise.all(
     lines.map((l) =>
       Product.updateOne({ _id: l.product }, { $inc: { stock: l.quantity } }),
     ),
   );
+  if (opts.log !== false) {
+    await logMovements(lines.map((l) => ({ product: l.product, delta: l.quantity, reason: "cancel" as const })));
+  }
 };
 
 /**
@@ -37,11 +41,12 @@ export const reserveStock = async (
       { $inc: { stock: -line.quantity } },
     );
     if (result.modifiedCount !== 1) {
-      await restoreStockLines(reserved);
+      await restoreStockLines(reserved, { log: false }); // nothing was logged yet, so nothing to un-log
       return { ok: false, productId: line.product };
     }
     reserved.push(line);
   }
+  await logMovements(reserved.map((l) => ({ product: l.product, delta: -l.quantity, reason: "sale" as const })));
   return { ok: true };
 };
 

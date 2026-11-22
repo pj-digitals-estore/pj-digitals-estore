@@ -3,7 +3,9 @@ import Product from "../models/Products.js";
 import Shop from "../models/Shop.js";
 import { PRODUCT_CATEGORIES } from "../types/index.js";
 import { escapeRegex, sendError } from "../utils/http.js";
-import { destroyImages, ImageError, uploadImage } from "../utils/imageStore.js";
+import { cloneImage, destroyImages, ImageError, uploadImage } from "../utils/imageStore.js";
+import CatalogItem from "../models/CatalogItem.js";
+import { cleanExtras, rememberInCatalog } from "../utils/catalog.js";
 
 // --------------------------------------------------
 // HELPERS
@@ -66,6 +68,17 @@ const pickProductFields = (body: any) => {
     if (body[f] !== undefined) out[f] = body[f];
   }
   return out;
+};
+
+const duplicateBarcode = (error: any, res: Response) => {
+  if (error?.code === 11000 && /barcode/.test(String(error?.message))) {
+    res.status(409).json({
+      success: false,
+      message: "You already have a product with this barcode. Open that product instead of adding it again.",
+    });
+    return true;
+  }
+  return false;
 };
 
 const isAdmin = (req: Request) => req.user?.role === "admin";
@@ -142,7 +155,7 @@ export const getProducts = async (req: Request, res: Response) => {
 
     if (search) {
       const rx = new RegExp(escapeRegex(String(search).trim()), "i");
-      query.$or = [{ name: rx }, { description: rx }];
+      query.$or = [{ name: rx }, { description: rx }, { brand: rx }];
     }
 
     if (minPrice !== undefined || maxPrice !== undefined) {
@@ -207,7 +220,15 @@ export const createProduct = async (req: Request, res: Response) => {
   try {
     const files = getUploadedFiles(req);
 
-    if (files.length === 0) {
+    // No photo uploaded: a product picked from the shared catalogue may reuse the catalogue picture
+    // (copied, so deleting either product never breaks the other).
+    let catalogImage: string | null = null;
+    if (files.length === 0 && req.body.catalogBarcode) {
+      const item: any = await CatalogItem.findOne({ barcode: String(req.body.catalogBarcode).trim() });
+      if (item?.image) catalogImage = await cloneImage(item.image, "products");
+    }
+
+    if (files.length === 0 && !catalogImage) {
       return res.status(400).json({
         success: false,
         message: "Please upload at least one product image.",
@@ -233,12 +254,21 @@ export const createProduct = async (req: Request, res: Response) => {
 
     const uploaded = await Promise.all(files.map((f) => uploadImage(f)));
     images = uploaded.map((r) => r.secure_url);
+    if (catalogImage) images.push(catalogImage);
+
+    const extras = cleanExtras(req.body);
+    if (extras.error) {
+      await destroyImages(images);
+      return res.status(400).json({ success: false, message: extras.error });
+    }
 
     const product = await Product.create({
       ...data,
+      ...extras.set,
       images,
       sizes: parseSizes(req.body.sizes),
     });
+    await rememberInCatalog(product, req.shop?._id);
 
     return res.status(201).json({ success: true, data: product });
   } catch (error: any) {
@@ -247,6 +277,7 @@ export const createProduct = async (req: Request, res: Response) => {
     if (error instanceof ImageError) {
       return res.status(400).json({ success: false, message: error.message });
     }
+    if (duplicateBarcode(error, res)) return;
     sendError(res, error, "Failed to create product");
   }
 };
@@ -310,10 +341,19 @@ export const updateProduct = async (req: Request, res: Response) => {
       removed = existing.images.filter((img: string) => !finalImages.includes(img));
     }
 
-    const product = await Product.findByIdAndUpdate(req.params.id, updates, {
+    const extras = cleanExtras(req.body);
+    if (extras.error) {
+      if (newImages.length) await destroyImages(newImages);
+      return res.status(400).json({ success: false, message: extras.error });
+    }
+    const patch: Record<string, any> = { ...updates, ...extras.set };
+    if (Object.keys(extras.unset).length) patch.$unset = extras.unset;
+
+    const product = await Product.findByIdAndUpdate(req.params.id, patch, {
       new: true,
       runValidators: true,
     });
+    if (product) await rememberInCatalog(product, existing.shop);
 
     if (removed.length) await destroyImages(removed);
 
@@ -324,6 +364,7 @@ export const updateProduct = async (req: Request, res: Response) => {
     if (error instanceof ImageError) {
       return res.status(400).json({ success: false, message: error.message });
     }
+    if (duplicateBarcode(error, res)) return;
     sendError(res, error, "Failed to update product");
   }
 };

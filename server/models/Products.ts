@@ -7,7 +7,15 @@ const productSchema = new Schema<IProduct>(
     name: { type: String, required: true, trim: true },
     description: { type: String, required: true },
     price: { type: Number, required: true, min: 0 },
+    // comparePrice = MRP / "general" price (struck through next to the store price)
     comparePrice: { type: Number, min: 0 },
+    // what the shop paid. PRIVATE: never returned unless a query asks for it with "+costPrice"
+    costPrice: { type: Number, min: 0, select: false },
+    // unique within one shop (the same barcode may exist in many shops)
+    barcode: { type: String, trim: true },
+    sku: { type: String, trim: true },
+    brand: { type: String, trim: true },
+    unit: { type: String, trim: true }, // e.g. "pcs", "kg", "500 ml"
     images: [{ type: String }],
     sizes: [{ type: String }],
     category: {
@@ -30,6 +38,10 @@ const productSchema = new Schema<IProduct>(
 );
 
 productSchema.index({ name: "text", description: "text" });
+productSchema.index(
+  { shop: 1, barcode: 1 },
+  { unique: true, partialFilterExpression: { barcode: { $type: "string" } } },
+);
 productSchema.index({ isActive: 1, category: 1, price: 1 });
 
 const Product = mongoose.model<IProduct>("Product", productSchema);
