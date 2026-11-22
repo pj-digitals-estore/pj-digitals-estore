@@ -24,6 +24,15 @@ import {
   updateStock,
 } from "../controllers/shopController.js";
 import {
+  adjustStock,
+  exportInventory,
+  getInventory,
+  getInventorySummary,
+  getMovements,
+  lookupBarcode,
+  receiveStock,
+} from "../controllers/inventoryController.js";
+import {
   createAd,
   deleteAd,
   getMyAds,
@@ -50,6 +59,15 @@ ShopOwnerRouter.put("/me", loadShop(true), upload.single("logo"), updateMyShop);
 
 ShopOwnerRouter.get("/products", loadShop(true), getShopProducts);
 ShopOwnerRouter.put("/products/:id/stock", loadShop(true), validateObjectId("id"), updateStock);
+
+// stock tools (barcode lookup, scan-in, history, valuation, CSV)
+ShopOwnerRouter.get("/inventory", loadShop(true), getInventory);
+ShopOwnerRouter.get("/inventory/summary", loadShop(true), getInventorySummary);
+ShopOwnerRouter.get("/inventory/lookup", loadShop(true), lookupBarcode);
+ShopOwnerRouter.get("/inventory/movements", loadShop(true), getMovements);
+ShopOwnerRouter.get("/inventory/export.csv", loadShop(true), exportInventory);
+ShopOwnerRouter.post("/inventory/receive", loadShop(true), receiveStock);
+ShopOwnerRouter.post("/inventory/:id/adjust", loadShop(true), validateObjectId("id"), adjustStock);
 
 ShopOwnerRouter.get("/orders", loadShop(true), getShopOrders);
 ShopOwnerRouter.put("/orders/:id/status", loadShop(true), validateObjectId("id"), updateShopOrderStatus);

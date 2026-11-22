@@ -10,6 +10,7 @@ import { attachDeliveries, transitionOrder } from "../utils/orderHelpers.js";
 import { notify, notifyAdmins } from "../utils/notify.js";
 import { getSettings } from "../utils/settings.js";
 import { shopMayAssignDrivers } from "./shopDispatchController.js";
+import { adjustStock } from "./inventoryController.js";
 
 const slugify = (name: string) =>
   name
@@ -80,7 +81,8 @@ export const listShops = async (req: Request, res: Response) => {
     if (req.query.location) query.location = String(req.query.location);
     if (req.query.category) query.categories = String(req.query.category);
     if (req.query.search) {
-      query.name = new RegExp(escapeRegex(String(req.query.search).trim()), "i");
+      const rx = new RegExp(escapeRegex(String(req.query.search).trim()), "i");
+      query.$or = [{ name: rx }, { barcode: rx }, { sku: rx }, { brand: rx }];
     }
 
     const [total, shops] = await Promise.all([
@@ -230,6 +232,7 @@ export const getShopProducts = async (req: Request, res: Response) => {
     const [total, products] = await Promise.all([
       Product.countDocuments(query),
       Product.find(query)
+        .select("+costPrice")
         .sort("-updatedAt")
         .skip((page - 1) * limit)
         .limit(limit),
@@ -246,46 +249,15 @@ export const getShopProducts = async (req: Request, res: Response) => {
 };
 
 // PUT /api/shop/products/:id/stock   body: { stock } (set) OR { adjust } (+/-)
+// Kept for the existing screens; it now goes through the same code as the new stock tools,
+// so every change is also written to the stock history.
 export const updateStock = async (req: Request, res: Response) => {
-  try {
-    const { stock, adjust } = req.body;
-    const filter: any = { _id: req.params.id, shop: req.shop._id };
-    let update: any;
-
-    if (stock !== undefined) {
-      const n = Number(stock);
-      if (!Number.isInteger(n) || n < 0) {
-        return res
-          .status(400)
-          .json({ success: false, message: "stock must be a whole number >= 0" });
-      }
-      update = { stock: n };
-    } else if (adjust !== undefined) {
-      const n = Number(adjust);
-      if (!Number.isInteger(n) || n === 0) {
-        return res
-          .status(400)
-          .json({ success: false, message: "adjust must be a non-zero whole number" });
-      }
-      if (n < 0) filter.stock = { $gte: -n }; // never go below zero
-      update = { $inc: { stock: n } };
-    } else {
-      return res
-        .status(400)
-        .json({ success: false, message: "Provide stock or adjust" });
-    }
-
-    const product = await Product.findOneAndUpdate(filter, update, { new: true });
-    if (!product) {
-      return res.status(404).json({
-        success: false,
-        message: "Product not found (or not enough stock to remove)",
-      });
-    }
-    res.json({ success: true, data: product });
-  } catch (error) {
-    sendError(res, error, "Failed to update stock");
+  const { stock, adjust } = req.body || {};
+  if (stock === undefined && adjust === undefined) {
+    return res.status(400).json({ success: false, message: "Provide stock or adjust" });
   }
+  req.body = stock !== undefined ? { set: stock } : { delta: adjust };
+  return adjustStock(req, res);
 };
 
 // ===================== OWNER: ORDERS =====================
