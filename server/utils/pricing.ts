@@ -9,7 +9,7 @@ import type { PlatformSettings } from "./settings.js";
  */
 export const computeTotals = (
   subtotal: number,
-  settings: Pick<PlatformSettings, "shippingCost" | "freeShippingThreshold" | "taxRate">,
+  settings: Pick<PlatformSettings, "shippingCost" | "freeShippingThreshold" | "taxRate"> & Partial<Pick<PlatformSettings, "gstRegistered">>,
 ) => {
   const flat = Number(settings.shippingCost);
   const threshold = Number(settings.freeShippingThreshold);
@@ -17,7 +17,8 @@ export const computeTotals = (
 
   const shippingCost =
     threshold > 0 && subtotal >= threshold ? 0 : Number.isFinite(flat) ? flat : 0;
-  const tax = round2(subtotal * (Number.isFinite(taxRate) ? taxRate : 0));
+  // An unregistered seller must not charge GST, so a leftover tax rate does nothing until GST is switched on.
+  const tax = settings.gstRegistered ? round2(subtotal * (Number.isFinite(taxRate) ? taxRate : 0)) : 0;
   const totalAmount = round2(subtotal + shippingCost + tax);
 
   return { subtotal: round2(subtotal), shippingCost, tax, totalAmount };
@@ -25,3 +26,16 @@ export const computeTotals = (
 
 /** Razorpay expects amounts in the smallest currency unit (paise). */
 export const toPaise = (amount: number) => Math.round(amount * 100);
+
+/** Cash-on-delivery rules. Returns a customer-facing reason when COD can't be used, else null. */
+export const codBlockReason = (
+  settings: Pick<PlatformSettings, "allowCod" | "codMaxAmount">,
+  checkoutTotal: number,
+): string | null => {
+  if (!settings.allowCod) return "Cash on delivery is not available";
+  const max = Number(settings.codMaxAmount);
+  if (max > 0 && checkoutTotal > max) {
+    return `Cash on delivery is available for orders up to ₹${max}. Please reduce your cart or contact the shop.`;
+  }
+  return null;
+};

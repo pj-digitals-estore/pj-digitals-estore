@@ -11,11 +11,13 @@ import {
   PaymentMethod,
 } from "../types/index.js";
 import { escapeRegex, HttpError, round2, sendError } from "../utils/http.js";
-import { computeTotals } from "../utils/pricing.js";
+import { codBlockReason, computeTotals } from "../utils/pricing.js";
 import {
   attachDeliveries,
+  cancelReasonLabel,
   generateCheckoutId,
   generateOrderNumber,
+  readCancelInfo,
   reserveStock,
   restoreOrderStock,
   restoreStockLines,
@@ -216,6 +218,15 @@ export const createOrder = async (req: Request, res: Response) => {
       });
     }
 
+    // COD limit: checked on the whole checkout BEFORE any stock is reserved
+    if (paymentMethod === "cod" && Number(settings.codMaxAmount) > 0) {
+      const perShop = new Map<string, number>();
+      for (const i of orderItems) perShop.set(i.shop, (perShop.get(i.shop) ?? 0) + i.price * i.quantity);
+      const total = [...perShop.values()].reduce((sum, sub) => sum + computeTotals(sub, settings).totalAmount, 0);
+      const why = codBlockReason(settings, total);
+      if (why) return res.status(400).json({ success: false, message: why });
+    }
+
     // Atomic stock reservation (rolled back automatically on failure)
     const stock = await reserveStock(orderItems);
     if (!stock.ok) {
@@ -312,6 +323,83 @@ export const createOrder = async (req: Request, res: Response) => {
   }
 };
 
+// Price the cart exactly the way createOrder will, without changing anything: one group per shop,
+// each with its own delivery fee, plus anything that would stop the order (so checkout can warn first).
+// Keep the rules here in step with createOrder above.
+// GET /api/orders/quote
+export const getQuote = async (req: Request, res: Response) => {
+  try {
+    const settings = await getSettings();
+    const cart: any = await Cart.findOne({ user: req.user._id }).populate("items.product");
+    const threshold = Number(settings.freeShippingThreshold) || 0;
+    const base = {
+      gstRegistered: settings.gstRegistered,
+      freeShippingThreshold: threshold,
+      cod: { allowed: settings.allowCod, max: Number(settings.codMaxAmount) || 0 },
+      online: razorpayConfigured(),
+    };
+    if (!cart || cart.items.length === 0) {
+      return res.json({
+        success: true,
+        data: { ...base, empty: true, groups: [], issues: [], canCheckout: false, summary: { subtotal: 0, shippingCost: 0, tax: 0, totalAmount: 0, orders: 0 } },
+      });
+    }
+
+    const shopIds = [...new Set(cart.items.map((i: any) => i.product?.shop?.toString()).filter(Boolean) as string[])];
+    const shops: any[] = await Shop.find({ _id: { $in: shopIds } }).select("name logo location isOpen status");
+    const shopById = new Map(shops.map((s) => [s._id.toString(), s]));
+
+    const issues: { productId: any; name: string; message: string }[] = [];
+    const byShop = new Map<string, { shop: any; items: any[] }>();
+    for (const item of cart.items) {
+      const product: any = item.product;
+      if (!product || !product.isActive) {
+        issues.push({ productId: product?._id ?? item.product, name: product?.name ?? "An item", message: "is no longer available" });
+        continue;
+      }
+      const shop = product.shop ? shopById.get(product.shop.toString()) : null;
+      if (product.shop && (!shop || shop.status !== "approved")) {
+        issues.push({ productId: product._id, name: product.name, message: "is not available right now" });
+        continue;
+      }
+      if (shop && !shop.isOpen) issues.push({ productId: product._id, name: product.name, message: `can't be ordered: ${shop.name} is closed right now` });
+      if (product.sizes?.length > 0 && !product.sizes.includes(item.size)) issues.push({ productId: product._id, name: product.name, message: "needs a size selected" });
+      if (product.stock < item.quantity) {
+        issues.push({ productId: product._id, name: product.name, message: product.stock === 0 ? "is out of stock" : `only has ${product.stock} left` });
+      }
+      const key = shop ? shop._id.toString() : "platform";
+      const g = byShop.get(key) ?? { shop: shop ?? null, items: [] };
+      g.items.push({ productId: product._id, name: product.name, image: product.images?.[0], quantity: item.quantity, price: product.price, size: item.size, stock: product.stock });
+      byShop.set(key, g);
+    }
+
+    const groups = [...byShop.values()]
+      .sort((a, b) => (a.shop?.name ?? "￿").localeCompare(b.shop?.name ?? "￿"))
+      .map((g) => {
+        const subtotal = g.items.reduce((s: number, i: any) => s + i.price * i.quantity, 0);
+        const t = computeTotals(subtotal, settings);
+        return {
+          shop: g.shop && { _id: g.shop._id, name: g.shop.name, logo: g.shop.logo, location: g.shop.location, isOpen: g.shop.isOpen },
+          items: g.items,
+          ...t,
+          // how much more from this shop makes delivery free (null when it already is, or the offer is off)
+          addForFreeDelivery: threshold > 0 && subtotal < threshold && t.shippingCost > 0 ? round2(threshold - subtotal) : null,
+        };
+      });
+
+    const sum = (k: "subtotal" | "shippingCost" | "tax" | "totalAmount") => round2(groups.reduce((s, g) => s + g[k], 0));
+    const summary = { subtotal: sum("subtotal"), shippingCost: sum("shippingCost"), tax: sum("tax"), totalAmount: sum("totalAmount"), orders: groups.length };
+    const codWhy = codBlockReason(settings, summary.totalAmount);
+
+    res.json({
+      success: true,
+      data: { ...base, empty: false, groups, issues, summary, canCheckout: issues.length === 0 && groups.length > 0, cod: { ...base.cod, allowed: !codWhy, reason: codWhy } },
+    });
+  } catch (error) {
+    sendError(res, error, "Failed to price your cart");
+  }
+};
+
 // Customer cancels their own order (only before it's processed / paid)
 // PUT /api/orders/:id/cancel
 export const cancelOrder = async (req: Request, res: Response) => {
@@ -338,8 +426,14 @@ export const cancelOrder = async (req: Request, res: Response) => {
       });
     }
 
+    const info = readCancelInfo(req.body, "customer"); // the reason is optional for customers
+    if (info.error) return res.status(400).json({ success: false, message: info.error });
+
     order.orderStatus = "cancelled";
     order.cancelledAt = new Date();
+    order.cancelledBy = "customer";
+    if (info.reason) order.cancelReason = info.reason;
+    if (info.note) order.cancelNote = info.note;
     await order.save();
     await restoreOrderStock(order._id);
 
@@ -349,7 +443,7 @@ export const cancelOrder = async (req: Request, res: Response) => {
         await notify(shop.owner, {
           type: "order",
           title: "Order cancelled by customer",
-          body: order.orderNumber,
+          body: `${order.orderNumber}${info.reason ? `: ${cancelReasonLabel("customer", info.reason)}` : ""}`,
           data: { orderId: order._id },
         });
       }

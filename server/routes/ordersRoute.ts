@@ -5,6 +5,7 @@ import {
   getAllOrders,
   getOrder,
   getOrders,
+  getQuote,
   updateOrderStatus,
 } from "../controllers/ordersController.js";
 import { authorize, protect } from "../middleware/auth.js";
@@ -16,6 +17,7 @@ const OrderRouter = express.Router();
 OrderRouter.use(protect);
 
 OrderRouter.get("/", getOrders);
+OrderRouter.get("/quote", getQuote); // before "/:id"
 OrderRouter.post("/", createOrder);
 
 // admin (declared before "/:id" routes)

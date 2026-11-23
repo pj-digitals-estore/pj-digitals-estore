@@ -4,7 +4,7 @@ import Product from "../models/Products.js";
 import { sendError } from "../utils/http.js";
 
 const MAX_QTY = 99;
-const POPULATE = "name images price stock sizes isActive";
+const POPULATE = "name images price stock sizes isActive shop";
 
 const parseQty = (value: any, fallback = 1): number | null => {
   const q = value === undefined ? fallback : Number(value);
@@ -15,7 +15,8 @@ const sameLine = (item: any, productId: string, size?: string) =>
   item.product.toString() === productId && (item.size || undefined) === (size || undefined);
 
 const respond = async (res: Response, cart: any) => {
-  await cart.populate("items.product", POPULATE);
+  // the shop comes along so the cart can be shown grouped by shop
+  await cart.populate({ path: "items.product", select: POPULATE, populate: { path: "shop", select: "name logo location isOpen" } });
   // `cart` kept for backwards compatibility, `data` matches the other endpoints
   res.json({ success: true, cart, data: cart });
 };

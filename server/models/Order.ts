@@ -1,5 +1,6 @@
 import mongoose from "mongoose";
 import {
+  CANCELLED_BY,
   IOrder,
   ORDER_STATUSES,
   PAYMENT_METHODS,
@@ -74,6 +75,9 @@ const orderSchema = new mongoose.Schema<IOrder>(
     paidAt: Date,
     deliveredAt: Date,
     cancelledAt: Date,
+    cancelReason: { type: String, maxlength: 40 }, // a code from CANCEL_REASONS
+    cancelNote: { type: String, maxlength: 200 },
+    cancelledBy: { type: String, enum: CANCELLED_BY },
   },
   { timestamps: true },
 );

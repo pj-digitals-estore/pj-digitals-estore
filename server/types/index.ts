@@ -48,6 +48,26 @@ export const SETTLEMENT_STATUSES = ["pending", "paid", "void"] as const;
 export const AD_PLACEMENTS = ["home", "catalogue", "shops", "product"] as const;
 export const PAYOUT_METHODS = ["upi", "bank"] as const;
 export const PAYOUT_REQUEST_STATUSES = ["open", "fulfilled", "rejected"] as const;
+// Why an order was cancelled. Customers and shops pick from different lists.
+export const CANCEL_REASONS = {
+  customer: [
+    ["changed_mind", "I changed my mind"],
+    ["ordered_by_mistake", "Ordered by mistake"],
+    ["found_cheaper", "Found a better price"],
+    ["wrong_address", "Wrong address or phone"],
+    ["too_slow", "Taking too long"],
+    ["other", "Other"],
+  ],
+  shop: [
+    ["out_of_stock", "Item is out of stock"],
+    ["price_error", "Price or listing was wrong"],
+    ["cannot_deliver", "Can't deliver to that address"],
+    ["customer_unreachable", "Couldn't reach the customer"],
+    ["shop_closed", "Shop is closed"],
+    ["other", "Other"],
+  ],
+} as const;
+export const CANCELLED_BY = ["customer", "shop", "admin", "system"] as const;
 export const VEHICLE_TYPES = ["bike", "scooter", "bicycle", "car", "van", "other"] as const;
 
 export type Role = (typeof ROLES)[number];
@@ -134,6 +154,9 @@ export interface IOrder extends Document {
   paidAt?: Date;
   deliveredAt?: Date;
   cancelledAt?: Date;
+  cancelReason?: string;
+  cancelNote?: string;
+  cancelledBy?: (typeof CANCELLED_BY)[number];
   createdAt: Date;
   updatedAt: Date;
 }
