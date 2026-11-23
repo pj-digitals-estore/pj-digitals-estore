@@ -1,3 +1,4 @@
+import { reviewLimiter } from "../middleware/security.js";
 import express from "express";
 import {
   createProduct,
@@ -52,7 +53,7 @@ ProductRouter.delete(
 // Reviews
 ProductRouter.get("/:id/reviews", validateObjectId("id"), optionalAuth, getReviews);
 // upload.array only reads multipart bodies; plain JSON posts (older apps) still work
-ProductRouter.post("/:id/reviews", validateObjectId("id"), protect, upload.array("images", 3), createReview);
+ProductRouter.post("/:id/reviews", validateObjectId("id"), protect, reviewLimiter, upload.array("images", 3), createReview);
 ProductRouter.post("/:id/reviews/:reviewId/helpful", validateObjectId("id", "reviewId"), protect, toggleHelpful);
 ProductRouter.delete(
   "/:id/reviews/:reviewId",
