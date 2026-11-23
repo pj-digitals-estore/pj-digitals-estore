@@ -67,6 +67,8 @@ export const CANCEL_REASONS = {
     ["other", "Other"],
   ],
 } as const;
+// seasonal storefront themes an admin can force on (the website has the colours for each)
+export const THEME_SEASONS = ["vishu", "onam", "diwali", "christmas", "newyear"] as const;
 export const CANCELLED_BY = ["customer", "shop", "admin", "system"] as const;
 export const VEHICLE_TYPES = ["bike", "scooter", "bicycle", "car", "van", "other"] as const;
 

@@ -98,6 +98,12 @@ export const getMeta = async (_req: Request, res: Response) => {
       codMaxAmount: settings?.codMaxAmount ?? 0,
       gstRegistered: settings?.gstRegistered ?? false,
       gstin: settings?.gstRegistered ? settings.gstin : "",
+      // storefront theme: the admin can force a season on/off or move the festival dates
+      theme: (() => {
+        let dates = {};
+        try { dates = settings?.seasonDates ? JSON.parse(settings.seasonDates) : {}; } catch { /* ignore a bad value */ }
+        return { override: settings?.themeOverride ?? "auto", dates };
+      })(),
       cancelReasons: {
         customer: CANCEL_REASONS.customer.map(([value, label]) => ({ value, label })),
         shop: CANCEL_REASONS.shop.map(([value, label]) => ({ value, label })),

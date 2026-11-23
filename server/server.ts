@@ -26,6 +26,7 @@ import {
 import { errorHandler, notFound } from "./middleware/validate.js";
 import { health, healthDetails } from "./controllers/healthController.js";
 import { MEDIA_DIR } from "./utils/imageStore.js";
+import { shareImage, shareProduct } from "./controllers/shareController.js";
 import { alertOps, errorText, escapeHtml, sendTelegram } from "./utils/telegram.js";
 
 // A crash is restarted by Docker; tell the owner first (Telegram is a no-op when not configured).
@@ -83,6 +84,10 @@ app.use(
     res.status(404).end();
   },
 );
+
+// Link previews for WhatsApp/Telegram/etc. (the website's nginx sends crawlers here). No auth needed.
+app.get("/share/product/:id", shareProduct);
+app.get("/share/og/:file", shareImage);
 
 app.use(express.json({ limit: "1mb" }));
 app.use(clerkMiddleware());

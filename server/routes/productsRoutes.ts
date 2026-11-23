@@ -13,6 +13,7 @@ import {
   createReview,
   deleteReview,
   getReviews,
+  toggleHelpful,
 } from "../controllers/reviewController.js";
 import { validateObjectId } from "../middleware/validate.js";
 
@@ -49,8 +50,10 @@ ProductRouter.delete(
 );
 
 // Reviews
-ProductRouter.get("/:id/reviews", validateObjectId("id"), getReviews);
-ProductRouter.post("/:id/reviews", validateObjectId("id"), protect, createReview);
+ProductRouter.get("/:id/reviews", validateObjectId("id"), optionalAuth, getReviews);
+// upload.array only reads multipart bodies; plain JSON posts (older apps) still work
+ProductRouter.post("/:id/reviews", validateObjectId("id"), protect, upload.array("images", 3), createReview);
+ProductRouter.post("/:id/reviews/:reviewId/helpful", validateObjectId("id", "reviewId"), protect, toggleHelpful);
 ProductRouter.delete(
   "/:id/reviews/:reviewId",
   validateObjectId("id", "reviewId"),
