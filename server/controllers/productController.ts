@@ -1,7 +1,7 @@
 import { Request, Response } from "express";
 import Product from "../models/Products.js";
 import Shop from "../models/Shop.js";
-import { PRODUCT_CATEGORIES } from "../types/index.js";
+import { resolveCategory } from "../utils/categories.js";
 import { escapeRegex, sendError } from "../utils/http.js";
 import { cloneImage, destroyImages, ImageError, uploadImage } from "../utils/imageStore.js";
 import CatalogItem from "../models/CatalogItem.js";
@@ -124,15 +124,7 @@ export const getProducts = async (req: Request, res: Response) => {
     const seeAll = isAdmin(req) && req.query.includeInactive === "true";
     if (!seeAll) query.isActive = true;
 
-    if (category) {
-      if (!(PRODUCT_CATEGORIES as readonly string[]).includes(String(category))) {
-        return res.status(400).json({
-          success: false,
-          message: `category must be one of: ${PRODUCT_CATEGORIES.join(", ")}`,
-        });
-      }
-      query.category = String(category);
-    }
+    if (category) query.category = String(category);
 
     // Shop / location filtering. Products of pending/suspended shops stay hidden.
     if (!seeAll) {
@@ -236,6 +228,14 @@ export const createProduct = async (req: Request, res: Response) => {
     }
 
     const data: Record<string, any> = pickProductFields(req.body);
+    if (data.category !== undefined) {
+      const cat = await resolveCategory(data.category);
+      if (!cat) {
+        await destroyImages([catalogImage]);
+        return res.status(400).json({ success: false, message: "Choose one of the listed categories." });
+      }
+      data.category = cat;
+    }
 
     if (isShopOwner(req)) {
       data.shop = req.shop._id; // forced - owners can't create for other shops
@@ -300,6 +300,11 @@ export const updateProduct = async (req: Request, res: Response) => {
 
     const files = getUploadedFiles(req);
     const updates: Record<string, any> = pickProductFields(req.body);
+    if (updates.category !== undefined) {
+      const cat = await resolveCategory(updates.category, existing.category);
+      if (!cat) return res.status(400).json({ success: false, message: "Choose one of the listed categories." });
+      updates.category = cat;
+    }
 
     if (req.body.sizes !== undefined) updates.sizes = parseSizes(req.body.sizes);
 

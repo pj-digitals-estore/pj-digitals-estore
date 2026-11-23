@@ -9,6 +9,7 @@ export const ORDER_STATUSES = [
 ] as const;
 export const PAYMENT_STATUSES = ["pending", "paid", "failed", "refunded"] as const;
 export const PAYMENT_METHODS = ["cod", "razorpay"] as const;
+// The starting list. After first start-up the real list lives in the database (admin → Categories).
 export const PRODUCT_CATEGORIES = [
   "Mobile",
   "Tablet",
@@ -77,7 +78,7 @@ export type Role = (typeof ROLES)[number];
 export type OrderStatus = (typeof ORDER_STATUSES)[number];
 export type PaymentStatus = (typeof PAYMENT_STATUSES)[number];
 export type PaymentMethod = (typeof PAYMENT_METHODS)[number];
-export type ProductCategory = (typeof PRODUCT_CATEGORIES)[number];
+export type ProductCategory = string; // managed by the admin (see models/Category)
 
 export interface IAddress extends Document {
   user: Types.ObjectId;

@@ -62,6 +62,13 @@ import {
   previewDriverSettlement,
 } from "../controllers/payoutController.js";
 import {
+  adminCreateCategory,
+  adminDeleteCategory,
+  adminListCategories,
+  adminReorderCategories,
+  adminUpdateCategory,
+} from "../controllers/categoryController.js";
+import {
   adminListTickets,
   adminUpdateTicket,
 } from "../controllers/supportController.js";
@@ -73,6 +80,13 @@ AdminRouter.use(protect, authorize("admin"));
 // dashboard
 AdminRouter.get("/stats", getDashboardStats);
 AdminRouter.get("/overview", adminOverview);
+
+// product categories
+AdminRouter.get("/categories", adminListCategories);
+AdminRouter.post("/categories", adminCreateCategory);
+AdminRouter.put("/categories/order", adminReorderCategories); // before "/:id"
+AdminRouter.put("/categories/:id", validateObjectId("id"), adminUpdateCategory);
+AdminRouter.delete("/categories/:id", validateObjectId("id"), adminDeleteCategory);
 
 // platform settings, broadcast
 AdminRouter.get("/settings", getPlatformSettings);

@@ -1,6 +1,6 @@
 import { Schema } from "mongoose";
 import mongoose from "mongoose";
-import { IProduct, PRODUCT_CATEGORIES } from "../types/index.js";
+import { IProduct } from "../types/index.js";
 
 const productSchema = new Schema<IProduct>(
   {
@@ -20,8 +20,8 @@ const productSchema = new Schema<IProduct>(
     sizes: [{ type: String }],
     category: {
       type: String,
-      required: true,
-      enum: PRODUCT_CATEGORIES,
+      required: true, // checked against the admin's category list in productController
+      trim: true,
       default: "Other",
     },
     // which shop sells this product (null = platform/admin product)

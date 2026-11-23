@@ -3,6 +3,7 @@ import User from "../models/User.js";
 import Shop from "../models/Shop.js";
 import DeliveryPartner from "../models/DeliveryPartner.js";
 import Notification from "../models/Notification.js";
+import { activeCategoryNames } from "../utils/categories.js";
 import {
   AD_STATUSES,
   CANCEL_REASONS,
@@ -11,7 +12,6 @@ import {
   PARTNER_STATUSES,
   PAYMENT_METHODS,
   PAYMENT_STATUSES,
-  PRODUCT_CATEGORIES,
   ROLES,
   SERVICE_LOCATIONS,
   SETTLEMENT_STATUSES,
@@ -79,7 +79,7 @@ export const getMeta = async (_req: Request, res: Response) => {
   res.json({
     success: true,
     data: {
-      categories: PRODUCT_CATEGORIES,
+      categories: await activeCategoryNames(),
       locations: SERVICE_LOCATIONS,
       roles: ROLES,
       orderStatuses: ORDER_STATUSES,
