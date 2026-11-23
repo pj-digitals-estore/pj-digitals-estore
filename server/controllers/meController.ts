@@ -5,6 +5,7 @@ import DeliveryPartner from "../models/DeliveryPartner.js";
 import Notification from "../models/Notification.js";
 import {
   AD_STATUSES,
+  CANCEL_REASONS,
   DELIVERY_STATUSES,
   ORDER_STATUSES,
   PARTNER_STATUSES,
@@ -93,6 +94,14 @@ export const getMeta = async (_req: Request, res: Response) => {
       supportPhone: settings?.supportPhone ?? "",
       supportEmail: settings?.supportEmail ?? "",
       freeShippingThreshold: settings?.freeShippingThreshold ?? 0,
+      shippingCost: settings?.shippingCost ?? 0, // flat delivery fee per shop order
+      codMaxAmount: settings?.codMaxAmount ?? 0,
+      gstRegistered: settings?.gstRegistered ?? false,
+      gstin: settings?.gstRegistered ? settings.gstin : "",
+      cancelReasons: {
+        customer: CANCEL_REASONS.customer.map(([value, label]) => ({ value, label })),
+        shop: CANCEL_REASONS.shop.map(([value, label]) => ({ value, label })),
+      },
       deliveryStatuses: DELIVERY_STATUSES,
       shopStatuses: SHOP_STATUSES,
       partnerStatuses: PARTNER_STATUSES,

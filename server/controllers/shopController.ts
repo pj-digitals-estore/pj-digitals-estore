@@ -6,7 +6,7 @@ import Settlement from "../models/Settlement.js";
 import { ORDER_STATUSES, SERVICE_LOCATIONS } from "../types/index.js";
 import { escapeRegex, sendError } from "../utils/http.js";
 import { destroyImages, uploadImage } from "../utils/imageStore.js";
-import { attachDeliveries, transitionOrder } from "../utils/orderHelpers.js";
+import { attachDeliveries, cancelReasonLabel, readCancelInfo, transitionOrder } from "../utils/orderHelpers.js";
 import { notify, notifyAdmins } from "../utils/notify.js";
 import { getSettings } from "../utils/settings.js";
 import { shopMayAssignDrivers } from "./shopDispatchController.js";
@@ -320,12 +320,21 @@ export const updateShopOrderStatus = async (req: Request, res: Response) => {
         .json({ success: false, message: "This online order hasn't been paid yet" });
     }
 
-    await transitionOrder(order, orderStatus, "shop");
+    let cancel;
+    if (orderStatus === "cancelled" && order.orderStatus !== "cancelled") {
+      const info = readCancelInfo(req.body, "shop", { required: true });
+      if (info.error) return res.status(400).json({ success: false, message: info.error });
+      cancel = { ...info, by: "shop" as const };
+    }
+
+    await transitionOrder(order, orderStatus, "shop", cancel);
 
     await notify(order.user, {
       type: "order",
       title: `Order ${order.orderNumber} is ${orderStatus}`,
-      body: req.shop.name,
+      body: cancel?.reason
+        ? `${req.shop.name}: ${cancelReasonLabel("shop", cancel.reason)}${cancel.note ? ` (${cancel.note})` : ""}`
+        : req.shop.name,
       data: { orderId: order._id },
     });
 

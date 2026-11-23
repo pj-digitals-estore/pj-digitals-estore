@@ -1,7 +1,7 @@
 import Product from "../models/Products.js";
 import Order from "../models/Order.js";
 import Delivery from "../models/Delivery.js";
-import { IOrder, OrderStatus } from "../types/index.js";
+import { CANCEL_REASONS, IOrder, OrderStatus } from "../types/index.js";
 import { HttpError } from "./http.js";
 import { logMovements } from "./stockLog.js";
 
@@ -128,6 +128,7 @@ export const transitionOrder = async (
   order: any,
   next: OrderStatus,
   actor: "shop" | "admin" | "system",
+  cancel?: { reason?: string; note?: string; by?: "customer" | "shop" | "admin" | "system" },
 ) => {
   if (next === order.orderStatus) return order;
   const allowed = TRANSITIONS[actor][order.orderStatus] || [];
@@ -150,6 +151,9 @@ export const transitionOrder = async (
   }
   if (next === "cancelled") {
     order.cancelledAt = new Date();
+    order.cancelledBy = cancel?.by ?? (actor === "shop" ? "shop" : actor === "admin" ? "admin" : "system");
+    if (cancel?.reason) order.cancelReason = cancel.reason;
+    if (cancel?.note) order.cancelNote = cancel.note;
     // an active delivery for a cancelled order is cancelled too
     await Delivery.updateOne(
       { order: order._id, status: { $in: ["assigned", "accepted", "picked_up", "on_the_way"] } },
@@ -174,3 +178,21 @@ export const attachDeliveries = async (orders: any[]) => {
     return { ...obj, delivery: byOrder.get(o._id.toString()) ?? null };
   });
 };
+
+/** Reads { reason, note } from a request body. The reason must be one of the allowed codes for that actor. */
+export const readCancelInfo = (
+  body: any,
+  actor: "customer" | "shop",
+  { required = false }: { required?: boolean } = {},
+): { reason?: string; note?: string; error?: string } => {
+  const allowed = CANCEL_REASONS[actor].map(([code]) => code as string);
+  const reason = typeof body?.reason === "string" ? body.reason.trim() : "";
+  const note = typeof body?.note === "string" ? body.note.trim().slice(0, 200) : "";
+  if (!reason) return required ? { error: "Please choose a reason for cancelling." } : { note: note || undefined };
+  if (!allowed.includes(reason)) return { error: "That cancellation reason isn't valid." };
+  if (reason === "other" && required && !note) return { error: "Please add a short note for \"Other\"." };
+  return { reason, note: note || undefined };
+};
+
+export const cancelReasonLabel = (actor: "customer" | "shop", code?: string) =>
+  CANCEL_REASONS[actor].find(([c]) => c === code)?.[1];
