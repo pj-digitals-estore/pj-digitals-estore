@@ -14,6 +14,7 @@ import {
   applyForShop,
   getMyShop,
   getShop,
+  exportShopOrders,
   getShopOrders,
   getShopProducts,
   getShopSettlements,
@@ -29,6 +30,8 @@ import {
   getInventory,
   getInventorySummary,
   getMovements,
+  importInventory,
+  importTemplate,
   lookupBarcode,
   receiveStock,
 } from "../controllers/inventoryController.js";
@@ -66,9 +69,12 @@ ShopOwnerRouter.get("/inventory/summary", loadShop(true), getInventorySummary);
 ShopOwnerRouter.get("/inventory/lookup", loadShop(true), lookupBarcode);
 ShopOwnerRouter.get("/inventory/movements", loadShop(true), getMovements);
 ShopOwnerRouter.get("/inventory/export.csv", loadShop(true), exportInventory);
+ShopOwnerRouter.get("/inventory/template.csv", loadShop(true), importTemplate);
+ShopOwnerRouter.post("/inventory/import", loadShop(true), importInventory);
 ShopOwnerRouter.post("/inventory/receive", loadShop(true), receiveStock);
 ShopOwnerRouter.post("/inventory/:id/adjust", loadShop(true), validateObjectId("id"), adjustStock);
 
+ShopOwnerRouter.get("/orders/export.csv", loadShop(true), exportShopOrders); // before "/orders/:id/..."
 ShopOwnerRouter.get("/orders", loadShop(true), getShopOrders);
 ShopOwnerRouter.put("/orders/:id/status", loadShop(true), validateObjectId("id"), updateShopOrderStatus);
 

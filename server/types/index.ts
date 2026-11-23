@@ -9,6 +9,7 @@ export const ORDER_STATUSES = [
 ] as const;
 export const PAYMENT_STATUSES = ["pending", "paid", "failed", "refunded"] as const;
 export const PAYMENT_METHODS = ["cod", "razorpay"] as const;
+// The starting list. After first start-up the real list lives in the database (admin → Categories).
 export const PRODUCT_CATEGORIES = [
   "Mobile",
   "Tablet",
@@ -67,6 +68,8 @@ export const CANCEL_REASONS = {
     ["other", "Other"],
   ],
 } as const;
+// seasonal storefront themes an admin can force on (the website has the colours for each)
+export const THEME_SEASONS = ["vishu", "onam", "diwali", "christmas", "newyear"] as const;
 export const CANCELLED_BY = ["customer", "shop", "admin", "system"] as const;
 export const VEHICLE_TYPES = ["bike", "scooter", "bicycle", "car", "van", "other"] as const;
 
@@ -75,7 +78,7 @@ export type Role = (typeof ROLES)[number];
 export type OrderStatus = (typeof ORDER_STATUSES)[number];
 export type PaymentStatus = (typeof PAYMENT_STATUSES)[number];
 export type PaymentMethod = (typeof PAYMENT_METHODS)[number];
-export type ProductCategory = (typeof PRODUCT_CATEGORIES)[number];
+export type ProductCategory = string; // managed by the admin (see models/Category)
 
 export interface IAddress extends Document {
   user: Types.ObjectId;

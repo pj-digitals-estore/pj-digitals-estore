@@ -8,6 +8,9 @@ import { getSettings } from "../utils/settings.js";
 import { toCsv } from "../utils/payouts.js";
 import { normalizeBarcode } from "../utils/catalog.js";
 import { logMovements, MovementReason } from "../utils/stockLog.js";
+import { Existing, FIELD_OF, IMPORT_TEMPLATE, parseCsv, planImport } from "../utils/csvImport.js";
+import { rememberInCatalog } from "../utils/catalog.js";
+import { resolveCategory } from "../utils/categories.js";
 
 /**
  * Stock tools for a shop (the "dealer" side). Everything here is scoped to req.shop, which
@@ -272,5 +275,75 @@ export const exportInventory = async (req: Request, res: Response) => {
     res.send("﻿" + (rows.length ? toCsv(rows) : "name,barcode,stock"));
   } catch (error) {
     sendError(res, error, "Failed to export");
+  }
+};
+
+// GET /api/shop/inventory/template.csv
+export const importTemplate = (_req: Request, res: Response) => {
+  res.setHeader("Content-Type", "text/csv; charset=utf-8");
+  res.setHeader("Content-Disposition", 'attachment; filename="stock-template.csv"');
+  res.send("\uFEFF" + IMPORT_TEMPLATE);
+};
+
+const MAX_IMPORT_ROWS = 2000;
+
+// POST /api/shop/inventory/import   { csv: "<file text>", dryRun: true|false }
+// dryRun only reports what would happen. Matches products by barcode, then SKU, then exact name.
+// Existing products get only the columns that are filled in; stock is SET to the number in the file
+// (logged as a stock count). New products are created hidden (no photo yet) so the shop adds one first.
+export const importInventory = async (req: Request, res: Response) => {
+  try {
+    const text = typeof req.body?.csv === "string" ? req.body.csv : "";
+    if (!text.trim()) return res.status(400).json({ success: false, message: "The file is empty." });
+    const table = parseCsv(text);
+    if (table.length - 1 > MAX_IMPORT_ROWS) return res.status(400).json({ success: false, message: `Too many rows (max ${MAX_IMPORT_ROWS} per file). Split it into smaller files.` });
+
+    const existing = (await Product.find({ shop: req.shop._id })
+      .select("+costPrice name barcode sku category price comparePrice stock isActive brand unit").lean()) as unknown as Existing[];
+    // resolve each distinct category once (it's a database lookup)
+    const ci = (table[0] ?? []).findIndex((h) => FIELD_OF.get(h.toLowerCase().replace(/[^a-z0-9]/g, "")) === "category");
+    const cats = new Map<string, string | null>();
+    if (ci >= 0) for (const row of table.slice(1)) { const v = (row[ci] ?? "").trim(); if (v && !cats.has(v)) cats.set(v, await resolveCategory(v)); }
+    const plan = planImport(table, existing, (raw) => cats.get(raw.trim()) ?? null);
+    if (plan.error) return res.status(400).json({ success: false, message: plan.error });
+
+    const count = (a: string) => plan.rows.filter((r) => r.action === a).length;
+    const summary = { create: count("create"), update: count("update"), unchanged: count("unchanged"), error: count("error") };
+
+    if (req.body?.dryRun !== false && req.body?.dryRun !== "false") {
+      return res.json({ success: true, dryRun: true, summary, ignoredColumns: plan.ignoredColumns, rows: plan.rows.filter((r) => r.action !== "unchanged").slice(0, 300) });
+    }
+
+    const moves: any[] = [];
+    let created = 0, updated = 0;
+    const failures: { line: number; name?: string; error: string }[] = plan.rows.filter((r) => r.action === "error").map((r) => ({ line: r.line, name: r.name, error: r.error! }));
+    for (const r of plan.rows) {
+      try {
+        if (r.action === "create") {
+          const p: any = await Product.create({ ...r.set, description: r.name, images: [], shop: req.shop._id });
+          created++;
+          if (r.set!.stock > 0) moves.push({ shop: req.shop._id, product: p._id, delta: r.set!.stock, reason: "restock", note: "CSV import (new product)", costPrice: r.set!.costPrice, by: req.user?._id });
+          await rememberInCatalog(p, req.shop._id);
+        } else if (r.action === "update") {
+          const u: any = { $set: r.set };
+          if (r.stockDelta) u.$inc = { stock: r.stockDelta };
+          const p: any = await Product.findOneAndUpdate({ _id: r.productId, shop: req.shop._id }, u, { new: true });
+          if (!p) { failures.push({ line: r.line, name: r.name, error: "Product no longer exists" }); continue; }
+          updated++;
+          if (r.stockDelta) moves.push({ shop: req.shop._id, product: p._id, delta: r.stockDelta, reason: "count", note: "CSV import", by: req.user?._id });
+        }
+      } catch (e: any) {
+        failures.push({ line: r.line, name: r.name, error: e?.code === 11000 ? "Barcode already used by another of your products" : (e?.message || "Could not save") });
+      }
+    }
+    await logMovements(moves);
+    res.json({
+      success: true,
+      dryRun: false,
+      created, updated, unchanged: summary.unchanged, failed: failures.length, failures: failures.slice(0, 100),
+      message: `${created} added, ${updated} updated${failures.length ? `, ${failures.length} skipped` : ""}.${created ? " New products are hidden until you add a photo." : ""}`,
+    });
+  } catch (error) {
+    sendError(res, error, "Failed to import");
   }
 };

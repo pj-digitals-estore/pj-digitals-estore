@@ -1,4 +1,26 @@
 import Setting from "../models/Setting.js";
+import { THEME_SEASONS } from "../types/index.js";
+
+const DATE_RE = /^(\d{4}-)?\d{2}-\d{2}$/; // YYYY-MM-DD (one year only) or MM-DD (every year)
+
+/** Validates the festival-date overrides and returns them as a compact JSON string ("" = none). */
+export const cleanSeasonDates = (raw: unknown): string => {
+  if (raw === undefined || raw === null || raw === "") return "";
+  let obj: any;
+  try { obj = typeof raw === "string" ? JSON.parse(raw) : raw; } catch { throw new Error("Festival dates are not valid"); }
+  if (!obj || typeof obj !== "object" || Array.isArray(obj)) throw new Error("Festival dates are not valid");
+  const out: Record<string, [string, string]> = {};
+  for (const [id, range] of Object.entries(obj)) {
+    if (!(THEME_SEASONS as readonly string[]).includes(id)) continue;
+    if (!Array.isArray(range) || range.length !== 2) continue; // an empty row just means "use the built-in dates"
+    const [from, to] = range.map((d) => String(d ?? "").trim());
+    if (!from && !to) continue;
+    if (!DATE_RE.test(from) || !DATE_RE.test(to)) throw new Error(`Dates for ${id} must look like 2027-09-01`);
+    if (from.length === 10 && to.length === 10 && from > to) throw new Error(`The ${id} start date must be before its end date`);
+    out[id] = [from, to];
+  }
+  return Object.keys(out).length ? JSON.stringify(out) : "";
+};
 
 /**
  * Platform settings an admin can change without redeploying.
@@ -13,6 +35,8 @@ export type PlatformSettings = {
   gstRegistered: boolean; // tax is only ever charged when this is true (legally: only once you have a GSTIN)
   gstin: string;
   codMaxAmount: number; // largest cash-on-delivery checkout total; 0 = no limit
+  themeOverride: string; // "auto" (by date), "off" (always the normal colours) or a season id
+  seasonDates: string; // JSON {season: [from, to]} that replaces the built-in festival dates ("" = built-in)
   allowCod: boolean;
   shopsCanAssignDrivers: boolean; // can shop owners assign delivery partners to their own orders?
   lowStockLevel: number;
@@ -32,6 +56,8 @@ const defaults = (): PlatformSettings => ({
   gstRegistered: process.env.GST_REGISTERED === "true",
   gstin: process.env.GSTIN || "",
   codMaxAmount: num(process.env.COD_MAX_AMOUNT, 0),
+  themeOverride: "auto",
+  seasonDates: "",
   allowCod: process.env.ALLOW_COD !== "false",
   shopsCanAssignDrivers: process.env.SHOPS_CAN_ASSIGN_DRIVERS !== "false",
   lowStockLevel: num(process.env.LOW_STOCK_LEVEL, 5),
@@ -71,6 +97,11 @@ export const saveSettings = async (patch: Record<string, any>, userId?: any) => 
     if (!(k in base)) continue;
     if (k === "commissionRate" || k === "taxRate") rate(k);
     else if (["driverFee", "shippingCost", "freeShippingThreshold", "lowStockLevel", "codMaxAmount"].includes(k)) money(k);
+    else if (k === "themeOverride") {
+      const v = String(patch[k] ?? "auto");
+      if (v !== "auto" && v !== "off" && !(THEME_SEASONS as readonly string[]).includes(v)) throw new Error("Unknown theme");
+      clean[k] = v;
+    } else if (k === "seasonDates") clean[k] = cleanSeasonDates(patch[k]);
     else if (k === "gstin") {
       const g = String(patch[k] ?? "").trim().toUpperCase();
       if (g && !/^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z][1-9A-Z]Z[0-9A-Z]$/.test(g)) throw new Error("That GSTIN does not look right (15 characters, e.g. 32ABCDE1234F1Z5)");

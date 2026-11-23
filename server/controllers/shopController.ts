@@ -9,6 +9,8 @@ import { destroyImages, uploadImage } from "../utils/imageStore.js";
 import { attachDeliveries, cancelReasonLabel, readCancelInfo, transitionOrder } from "../utils/orderHelpers.js";
 import { notify, notifyAdmins } from "../utils/notify.js";
 import { getSettings } from "../utils/settings.js";
+import { csvSafe } from "../utils/csvImport.js";
+import { toCsv } from "../utils/payouts.js";
 import { shopMayAssignDrivers } from "./shopDispatchController.js";
 import { adjustStock } from "./inventoryController.js";
 
@@ -294,6 +296,41 @@ export const getShopOrders = async (req: Request, res: Response) => {
   }
 };
 
+// GET /api/shop/orders/export.csv?from=YYYY-MM-DD&to=YYYY-MM-DD   (dates are India time; default: last 30 days)
+export const exportShopOrders = async (req: Request, res: Response) => {
+  try {
+    const ist = (d: string, end: boolean) => /^\d{4}-\d{2}-\d{2}$/.test(d) ? new Date(`${d}T${end ? "23:59:59.999" : "00:00:00.000"}+05:30`) : null;
+    const to = ist(String(req.query.to || ""), true) ?? new Date();
+    const from = ist(String(req.query.from || ""), false) ?? new Date(to.getTime() - 30 * 86_400_000);
+    const orders: any[] = await Order.find({
+      shop: req.shop._id,
+      createdAt: { $gte: from, $lte: to },
+      $or: [{ paymentMethod: "cod" }, { paymentStatus: "paid" }],
+    }).sort("createdAt").limit(10000).lean();
+    const when = (d: Date) => new Date(d).toLocaleString("en-IN", { timeZone: "Asia/Kolkata", day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" });
+    const rows = orders.map((o) => ({
+      order_number: o.orderNumber,
+      date: when(o.createdAt),
+      customer: csvSafe(o.shippingAddress?.fullName ?? ""),
+      phone: csvSafe(o.shippingAddress?.phone ?? ""),
+      area: csvSafe(o.shippingAddress?.location ?? o.shippingAddress?.city ?? ""),
+      status: o.orderStatus,
+      payment: `${o.paymentMethod} / ${o.paymentStatus}`,
+      items: csvSafe((o.items || []).map((i: any) => `${i.name}${i.size ? ` (${i.size})` : ""} x${i.quantity}`).join(" | ")),
+      items_total: o.subtotal,
+      delivery_fee: o.shippingCost ?? 0,
+      tax: o.tax ?? 0,
+      order_total: o.totalAmount,
+      cancel_reason: o.orderStatus === "cancelled" ? o.cancelReason ?? "" : "",
+    }));
+    res.setHeader("Content-Type", "text/csv; charset=utf-8");
+    res.setHeader("Content-Disposition", 'attachment; filename="my-orders.csv"');
+    res.send("\uFEFF" + (rows.length ? toCsv(rows) : "order_number,date,customer,status,order_total"));
+  } catch (error) {
+    sendError(res, error, "Failed to export orders");
+  }
+};
+
 // PUT /api/shop/orders/:id/status   body: { orderStatus: "processing" | "cancelled" }
 // ("shipping"/"delivered" are driven by the delivery partner.)
 export const updateShopOrderStatus = async (req: Request, res: Response) => {
@@ -347,62 +384,74 @@ export const updateShopOrderStatus = async (req: Request, res: Response) => {
 // ===================== OWNER: STATS / SETTLEMENTS =====================
 
 // GET /api/shop/stats?days=30
+// Every date from `since` to today in India time, so the chart has no gaps (days without sales show 0).
+export const fillDays = (rows: { _id: string; orders: number; sales: number }[], days: number, now = new Date()) => {
+  const fmt = (d: Date) => d.toLocaleDateString("en-CA", { timeZone: "Asia/Kolkata" }); // YYYY-MM-DD
+  const by = new Map(rows.map((r) => [r._id, r]));
+  const out: { date: string; orders: number; sales: number }[] = [];
+  for (let i = days - 1; i >= 0; i--) {
+    const date = fmt(new Date(now.getTime() - i * 86_400_000));
+    const r = by.get(date);
+    out.push({ date, orders: r?.orders ?? 0, sales: r?.sales ?? 0 });
+  }
+  return out;
+};
+
 export const getShopStats = async (req: Request, res: Response) => {
   try {
     const days = Math.min(365, Math.max(1, Number(req.query.days) || 30));
-    const since = new Date(Date.now() - days * 24 * 60 * 60 * 1000);
+    const DAY = 24 * 60 * 60 * 1000;
+    const since = new Date(Date.now() - days * DAY);
+    const before = new Date(since.getTime() - days * DAY); // the same length of time just before, to compare with
     const shopId = req.shop._id;
     const lowLevel = (await getSettings()).lowStockLevel;
+    const live = { shop: shopId, orderStatus: { $ne: "cancelled" } };
+    const sumOrders = (from: Date, to: Date) => Order.aggregate([
+      { $match: { ...live, createdAt: { $gte: from, $lt: to } } },
+      { $group: { _id: null, orders: { $sum: 1 }, sales: { $sum: "$subtotal" }, paidSales: { $sum: { $cond: [{ $eq: ["$paymentStatus", "paid"] }, "$subtotal", 0] } } } },
+    ]);
 
-    const [totals, statusAgg, daily, topProducts, lowStock, productCount] = await Promise.all([
-      Order.aggregate([
-        { $match: { shop: shopId, orderStatus: { $ne: "cancelled" }, createdAt: { $gte: since } } },
-        {
-          $group: {
-            _id: null,
-            orders: { $sum: 1 },
-            sales: { $sum: "$subtotal" },
-            paidSales: {
-              $sum: { $cond: [{ $eq: ["$paymentStatus", "paid"] }, "$subtotal", 0] },
-            },
-          },
-        },
-      ]),
+    const [totals, prevTotals, statusAgg, daily, topProducts, byCategory, lowStock, productCount] = await Promise.all([
+      sumOrders(since, new Date(Date.now() + DAY)),
+      sumOrders(before, since),
       Order.aggregate([
         { $match: { shop: shopId } },
         { $group: { _id: "$orderStatus", count: { $sum: 1 } } },
       ]),
       Order.aggregate([
-        { $match: { shop: shopId, orderStatus: { $ne: "cancelled" }, createdAt: { $gte: since } } },
-        {
-          $group: {
-            _id: { $dateToString: { format: "%Y-%m-%d", date: "$createdAt", timezone: "Asia/Kolkata" } },
-            orders: { $sum: 1 },
-            sales: { $sum: "$subtotal" },
-          },
-        },
+        { $match: { ...live, createdAt: { $gte: since } } },
+        { $group: { _id: { $dateToString: { format: "%Y-%m-%d", date: "$createdAt", timezone: "Asia/Kolkata" } }, orders: { $sum: 1 }, sales: { $sum: "$subtotal" } } },
         { $sort: { _id: 1 } },
       ]),
       Order.aggregate([
-        { $match: { shop: shopId, orderStatus: { $ne: "cancelled" }, createdAt: { $gte: since } } },
+        { $match: { ...live, createdAt: { $gte: since } } },
         { $unwind: "$items" },
-        {
-          $group: {
-            _id: "$items.product",
-            name: { $first: "$items.name" },
-            unitsSold: { $sum: "$items.quantity" },
-            revenue: { $sum: { $multiply: ["$items.price", "$items.quantity"] } },
-          },
-        },
+        { $group: { _id: "$items.product", name: { $first: "$items.name" }, unitsSold: { $sum: "$items.quantity" }, revenue: { $sum: { $multiply: ["$items.price", "$items.quantity"] } } } },
         { $sort: { unitsSold: -1 } },
         { $limit: 5 },
       ]),
-      Product.find({ shop: shopId, isActive: true, stock: { $lte: lowLevel } })
-        .select("name stock images")
-        .sort("stock")
-        .limit(10),
+      // revenue by category + an estimate of profit (uses today's cost price; products without one don't count)
+      Order.aggregate([
+        { $match: { ...live, createdAt: { $gte: since } } },
+        { $unwind: "$items" },
+        { $lookup: { from: Product.collection.name, localField: "items.product", foreignField: "_id", as: "p" } },
+        { $unwind: { path: "$p", preserveNullAndEmptyArrays: true } },
+        { $group: {
+          _id: { $ifNull: ["$p.category", "Other"] },
+          revenue: { $sum: { $multiply: ["$items.price", "$items.quantity"] } },
+          units: { $sum: "$items.quantity" },
+          costedRevenue: { $sum: { $cond: [{ $gt: ["$p.costPrice", null] }, { $multiply: ["$items.price", "$items.quantity"] }, 0] } },
+          costedCost: { $sum: { $cond: [{ $gt: ["$p.costPrice", null] }, { $multiply: ["$p.costPrice", "$items.quantity"] }, 0] } },
+        } },
+        { $sort: { revenue: -1 } },
+      ]),
+      Product.find({ shop: shopId, isActive: true, stock: { $lte: lowLevel } }).select("name stock images").sort("stock").limit(10),
       Product.countDocuments({ shop: shopId }),
     ]);
+
+    const itemsRevenue = byCategory.reduce((s: number, c: any) => s + c.revenue, 0);
+    const costed = byCategory.reduce((s: number, c: any) => s + c.costedRevenue, 0);
+    const cost = byCategory.reduce((s: number, c: any) => s + c.costedCost, 0);
 
     res.json({
       success: true,
@@ -411,10 +460,13 @@ export const getShopStats = async (req: Request, res: Response) => {
         orders: totals[0]?.orders ?? 0,
         sales: totals[0]?.sales ?? 0,
         paidSales: totals[0]?.paidSales ?? 0,
+        previous: { orders: prevTotals[0]?.orders ?? 0, sales: prevTotals[0]?.sales ?? 0 },
         productCount,
         ordersByStatus: Object.fromEntries(statusAgg.map((s) => [s._id, s.count])),
-        dailySales: daily.map((d) => ({ date: d._id, orders: d.orders, sales: d.sales })),
+        dailySales: fillDays(daily, days),
         topProducts,
+        salesByCategory: byCategory.map((c: any) => ({ category: c._id, revenue: c.revenue, units: c.units })),
+        profit: { estimated: Math.round((costed - cost) * 100) / 100, coverage: itemsRevenue ? Math.round((costed / itemsRevenue) * 100) : 0 },
         lowStockProducts: lowStock,
       },
     });

@@ -25,7 +25,10 @@ import {
 } from "./routes/miscRoutes.js";
 import { errorHandler, notFound } from "./middleware/validate.js";
 import { health, healthDetails } from "./controllers/healthController.js";
+import { ensureCategories } from "./utils/categories.js";
 import { MEDIA_DIR } from "./utils/imageStore.js";
+import { apiLimiter, orderLimiter, reviewLimiter, securityHeaders, shareLimiter, supportLimiter, trackingLimiter, writeLimiter } from "./middleware/security.js";
+import { shareImage, shareProduct } from "./controllers/shareController.js";
 import { alertOps, errorText, escapeHtml, sendTelegram } from "./utils/telegram.js";
 
 // A crash is restarted by Docker; tell the owner first (Telegram is a no-op when not configured).
@@ -42,8 +45,11 @@ process.on("uncaughtException", async (error: any) => {
 
 const app = express();
 app.set("trust proxy", 1); // behind Vercel / a load balancer
+app.disable("x-powered-by");
+app.use(securityHeaders);
 
 await connectDB();
+await ensureCategories();
 
 // Webhooks need the RAW body for signature verification, so they must be
 // registered BEFORE express.json().
@@ -84,23 +90,29 @@ app.use(
   },
 );
 
+// Link previews for WhatsApp/Telegram/etc. (the website's nginx sends crawlers here). No auth needed.
+app.get("/share/product/:id", shareLimiter, shareProduct);
+app.get("/share/og/:file", shareLimiter, shareImage);
+
+app.use("/api", apiLimiter); // per visitor address, before Clerk so floods never reach it
 app.use(express.json({ limit: "1mb" }));
 app.use(clerkMiddleware());
+app.use("/api", writeLimiter); // per account for anything that changes data
 
 const port = process.env.PORT || 3000;
 
 app.use("/api/products", ProductRouter);
 app.use("/api/cart", CartRouter);
-app.use("/api/orders", OrderRouter);
+app.use("/api/orders", orderLimiter, OrderRouter);
 app.use("/api/payments", PaymentRouter);
 app.use("/api/address", AddressRouter);
 app.use("/api/wishlist", WishlistRouter);
 app.use("/api/shops", ShopDirectoryRouter);
 app.use("/api/shop", ShopOwnerRouter);
 app.use("/api/delivery", DeliveryRouter);
-app.use("/api/ads", PublicAdsRouter);
+app.use("/api/ads", trackingLimiter, PublicAdsRouter);
 app.use("/api/notifications", NotificationRouter);
-app.use("/api/support", SupportRouter);
+app.use("/api/support", supportLimiter, SupportRouter);
 app.use("/api/me", MeRouter);
 app.use("/api/meta", MetaRouter);
 app.use("/api/admin", AdminRouter);

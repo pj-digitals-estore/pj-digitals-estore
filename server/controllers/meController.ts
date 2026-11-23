@@ -3,6 +3,7 @@ import User from "../models/User.js";
 import Shop from "../models/Shop.js";
 import DeliveryPartner from "../models/DeliveryPartner.js";
 import Notification from "../models/Notification.js";
+import { activeCategoryNames } from "../utils/categories.js";
 import {
   AD_STATUSES,
   CANCEL_REASONS,
@@ -11,7 +12,6 @@ import {
   PARTNER_STATUSES,
   PAYMENT_METHODS,
   PAYMENT_STATUSES,
-  PRODUCT_CATEGORIES,
   ROLES,
   SERVICE_LOCATIONS,
   SETTLEMENT_STATUSES,
@@ -79,7 +79,7 @@ export const getMeta = async (_req: Request, res: Response) => {
   res.json({
     success: true,
     data: {
-      categories: PRODUCT_CATEGORIES,
+      categories: await activeCategoryNames(),
       locations: SERVICE_LOCATIONS,
       roles: ROLES,
       orderStatuses: ORDER_STATUSES,
@@ -98,6 +98,12 @@ export const getMeta = async (_req: Request, res: Response) => {
       codMaxAmount: settings?.codMaxAmount ?? 0,
       gstRegistered: settings?.gstRegistered ?? false,
       gstin: settings?.gstRegistered ? settings.gstin : "",
+      // storefront theme: the admin can force a season on/off or move the festival dates
+      theme: (() => {
+        let dates = {};
+        try { dates = settings?.seasonDates ? JSON.parse(settings.seasonDates) : {}; } catch { /* ignore a bad value */ }
+        return { override: settings?.themeOverride ?? "auto", dates };
+      })(),
       cancelReasons: {
         customer: CANCEL_REASONS.customer.map(([value, label]) => ({ value, label })),
         shop: CANCEL_REASONS.shop.map(([value, label]) => ({ value, label })),
