@@ -10,6 +10,7 @@ import { attachDeliveries, cancelReasonLabel, readCancelInfo, transitionOrder } 
 import { notify, notifyAdmins } from "../utils/notify.js";
 import { getSettings } from "../utils/settings.js";
 import { csvSafe } from "../utils/csvImport.js";
+import { fillDays } from "../utils/stats.js";
 import { toCsv } from "../utils/payouts.js";
 import { shopMayAssignDrivers } from "./shopDispatchController.js";
 import { adjustStock } from "./inventoryController.js";
@@ -384,19 +385,6 @@ export const updateShopOrderStatus = async (req: Request, res: Response) => {
 // ===================== OWNER: STATS / SETTLEMENTS =====================
 
 // GET /api/shop/stats?days=30
-// Every date from `since` to today in India time, so the chart has no gaps (days without sales show 0).
-export const fillDays = (rows: { _id: string; orders: number; sales: number }[], days: number, now = new Date()) => {
-  const fmt = (d: Date) => d.toLocaleDateString("en-CA", { timeZone: "Asia/Kolkata" }); // YYYY-MM-DD
-  const by = new Map(rows.map((r) => [r._id, r]));
-  const out: { date: string; orders: number; sales: number }[] = [];
-  for (let i = days - 1; i >= 0; i--) {
-    const date = fmt(new Date(now.getTime() - i * 86_400_000));
-    const r = by.get(date);
-    out.push({ date, orders: r?.orders ?? 0, sales: r?.sales ?? 0 });
-  }
-  return out;
-};
-
 export const getShopStats = async (req: Request, res: Response) => {
   try {
     const days = Math.min(365, Math.max(1, Number(req.query.days) || 30));

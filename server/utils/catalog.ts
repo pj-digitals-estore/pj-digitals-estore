@@ -1,12 +1,8 @@
 import CatalogItem from "../models/CatalogItem.js";
 import { cloneImage } from "./imageStore.js";
 
-const BARCODE_RE = /^[A-Za-z0-9][A-Za-z0-9._-]{2,31}$/;
-
-export const normalizeBarcode = (v: unknown): string | null => {
-  const s = String(v ?? "").trim();
-  return BARCODE_RE.test(s) ? s : null;
-};
+import { normalizeBarcode } from "./barcode.js";
+export { normalizeBarcode };
 
 const num = (v: unknown) => {
   if (v === undefined || v === null || String(v).trim() === "") return undefined;

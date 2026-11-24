@@ -1,4 +1,4 @@
-import { normalizeBarcode } from "./catalog.js";
+import { normalizeBarcode } from "./barcode.js";
 
 /** Stops a spreadsheet from running a cell as a formula (=, +, -, @ at the start). */
 export const csvSafe = (v: any) => (typeof v === "string" && /^[=+\-@\t\r]/.test(v) ? `'${v}` : v);
