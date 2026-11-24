@@ -5,6 +5,7 @@ import { createHash } from "node:crypto";
 import sharp from "sharp";
 import Product from "../models/Products.js";
 import { MEDIA_DIR, keyFromUrl } from "../utils/imageStore.js";
+import { loadBrand, siteUrl as brandSiteUrl } from "../utils/brand.js";
 
 /**
  * Link previews. WhatsApp, Telegram, Facebook & co. read a page's <meta> tags WITHOUT running
@@ -13,11 +14,7 @@ import { MEDIA_DIR, keyFromUrl } from "../utils/imageStore.js";
  * Real visitors never see it.
  */
 
-const siteUrl = () => {
-  const explicit = process.env.SITE_URL?.trim();
-  const fromClient = (process.env.CLIENT_URL || "").split(",").map((s) => s.trim()).find((u) => u && !/vercel\.app|localhost/.test(u));
-  return (explicit || fromClient || "https://nbyme.com").replace(/\/+$/, "");
-};
+const siteUrl = () => brandSiteUrl();
 
 export const esc = (v: unknown) =>
   String(v ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c] as string);
@@ -25,13 +22,16 @@ export const esc = (v: unknown) =>
 const clip = (s: string, n: number) => (s.length > n ? `${s.slice(0, n - 1).trimEnd()}…` : s);
 const rupees = (n: number) => `₹${Number(n).toLocaleString("en-IN", { maximumFractionDigits: 2 })}`;
 
-export const sharePage = ({ title, description, image, url }: { title: string; description: string; image: string; url: string }) => `<!doctype html>
+/** The picture used when a page has none of its own: the brand's share image/icon if set, else the built-in icon. */
+const defaultImage = (site: string) => `${site}/icons/${loadBrand().brand.images.shareImage || loadBrand().brand.images.icon || loadBrand().brand.images.logo ? "og.png" : "icon-512.png"}`;
+
+export const sharePage = ({ title, description, image, url, siteName = loadBrand().brand.name }: { title: string; description: string; image: string; url: string; siteName?: string }) => `<!doctype html>
 <html lang="en"><head><meta charset="utf-8">
 <title>${esc(title)}</title>
 <meta name="description" content="${esc(description)}">
 <link rel="canonical" href="${esc(url)}">
 <meta property="og:type" content="website">
-<meta property="og:site_name" content="PJ Digitals">
+<meta property="og:site_name" content="${esc(siteName)}">
 <meta property="og:title" content="${esc(title)}">
 <meta property="og:description" content="${esc(description)}">
 <meta property="og:url" content="${esc(url)}">
@@ -45,6 +45,18 @@ export const sharePage = ({ title, description, image, url }: { title: string; d
 <meta http-equiv="refresh" content="0;url=${esc(url)}">
 </head><body><a href="${esc(url)}">${esc(title)}</a></body></html>`;
 
+// GET /share/site   what a link to the home page looks like when pasted in WhatsApp & co.
+export const shareSite = (_req: Request, res: Response) => {
+  const { brand } = loadBrand();
+  const site = siteUrl();
+  res.status(200).type("html").set("Cache-Control", "public, max-age=300").send(sharePage({
+    title: brand.tagline ? `${brand.name} · ${brand.tagline}` : brand.name,
+    description: brand.description,
+    image: defaultImage(site),
+    url: site,
+  }));
+};
+
 // GET /share/product/:id
 export const shareProduct = async (req: Request, res: Response) => {
   const site = siteUrl();
@@ -57,7 +69,7 @@ export const shareProduct = async (req: Request, res: Response) => {
       ? await Product.findOne({ _id: id, isActive: true }).select("name description price comparePrice images brand unit shop").populate("shop", "name")
       : null;
     if (!p) {
-      return send(404, sharePage({ title: "PJ Digitals", description: "Shop local stores online, delivered to your door.", image: `${site}/icons/icon-512.png`, url: site }));
+      return send(404, sharePage({ title: loadBrand().brand.name, description: loadBrand().brand.description, image: defaultImage(site), url: site }));
     }
     const price = rupees(p.price);
     const off = p.comparePrice > p.price ? ` (MRP ${rupees(p.comparePrice)})` : "";
@@ -66,12 +78,12 @@ export const shareProduct = async (req: Request, res: Response) => {
     send(200, sharePage({
       title: clip(`${p.name} - ${price}`, 90),
       description: clip(`${price}${off}. ${facts ? facts + ". " : ""}${body}`.trim(), 200),
-      image: p.images?.[0] ? `${site}/share/og/${id}.jpg` : `${site}/icons/icon-512.png`,
+      image: p.images?.[0] ? `${site}/share/og/${id}.jpg` : defaultImage(site),
       url: `${site}/product/${id}`,
     }));
   } catch (error) {
     console.error("share page failed:", (error as Error).message);
-    send(500, sharePage({ title: "PJ Digitals", description: "Shop local stores online.", image: `${site}/icons/icon-512.png`, url: site }));
+    send(500, sharePage({ title: loadBrand().brand.name, description: loadBrand().brand.description, image: defaultImage(site), url: site }));
   }
 };
 
@@ -102,7 +114,7 @@ export const shareImage = async (req: Request, res: Response) => {
       // "contain" on a paper-coloured canvas: the whole product is visible, nothing is cropped
       const jpg = await sharp(input, { limitInputPixels: 50_000_000 })
         .rotate()
-        .resize(1200, 630, { fit: "contain", background: "#f6f4ef" })
+        .resize(1200, 630, { fit: "contain", background: loadBrand().brand.colors.background })
         .jpeg({ quality: 82, mozjpeg: true })
         .toBuffer();
       await mkdir(OG_DIR, { recursive: true });

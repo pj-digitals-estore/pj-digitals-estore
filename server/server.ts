@@ -27,8 +27,9 @@ import { errorHandler, notFound } from "./middleware/validate.js";
 import { health, healthDetails } from "./controllers/healthController.js";
 import { ensureCategories } from "./utils/categories.js";
 import { MEDIA_DIR } from "./utils/imageStore.js";
-import { apiLimiter, orderLimiter, reviewLimiter, securityHeaders, shareLimiter, supportLimiter, trackingLimiter, writeLimiter } from "./middleware/security.js";
-import { shareImage, shareProduct } from "./controllers/shareController.js";
+import { apiLimiter, brandLimiter, orderLimiter, reviewLimiter, securityHeaders, shareLimiter, supportLimiter, trackingLimiter, writeLimiter } from "./middleware/security.js";
+import { shareImage, shareProduct, shareSite } from "./controllers/shareController.js";
+import { brandFile, brandIcon, brandManifest } from "./controllers/brandController.js";
 import { alertOps, errorText, escapeHtml, sendTelegram } from "./utils/telegram.js";
 
 // A crash is restarted by Docker; tell the owner first (Telegram is a no-op when not configured).
@@ -92,6 +93,10 @@ app.use(
 
 // Link previews for WhatsApp/Telegram/etc. (the website's nginx sends crawlers here). No auth needed.
 app.get("/share/product/:id", shareLimiter, shareProduct);
+app.get("/share/site", shareLimiter, shareSite);
+app.get("/brand/manifest.webmanifest", brandLimiter, brandManifest);
+app.get("/brand/icon/:file", brandLimiter, brandIcon);
+app.get("/brand/file/:name", brandLimiter, brandFile);
 app.get("/share/og/:file", shareLimiter, shareImage);
 
 app.use("/api", apiLimiter); // per visitor address, before Clerk so floods never reach it
