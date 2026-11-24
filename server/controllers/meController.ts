@@ -4,6 +4,7 @@ import Shop from "../models/Shop.js";
 import DeliveryPartner from "../models/DeliveryPartner.js";
 import Notification from "../models/Notification.js";
 import { activeCategoryNames } from "../utils/categories.js";
+import { publicBrand } from "../utils/brand.js";
 import {
   AD_STATUSES,
   CANCEL_REASONS,
@@ -80,6 +81,7 @@ export const getMeta = async (_req: Request, res: Response) => {
     success: true,
     data: {
       categories: await activeCategoryNames(),
+      brand: publicBrand(),
       locations: SERVICE_LOCATIONS,
       roles: ROLES,
       orderStatuses: ORDER_STATUSES,

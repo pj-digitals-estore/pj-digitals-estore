@@ -113,3 +113,4 @@ export const reviewLimiter = rateLimit({
 });
 export const trackingLimiter = rateLimit({ name: "tracking", windowMs: 60_000, max: 120 }); // ad impressions/clicks
 export const shareLimiter = rateLimit({ name: "share", windowMs: 60_000, max: 120 }); // image rendering is CPU work
+export const brandLimiter = rateLimit({ name: "brand", windowMs: 60_000, max: 300 }); // icons are drawn on demand (cached after)

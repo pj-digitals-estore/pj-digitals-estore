@@ -1,3 +1,4 @@
+import { adminBrand } from "../controllers/brandController.js";
 import express from "express";
 import { authorize, protect } from "../middleware/auth.js";
 import { validateObjectId } from "../middleware/validate.js";
@@ -80,6 +81,9 @@ AdminRouter.use(protect, authorize("admin"));
 // dashboard
 AdminRouter.get("/stats", getDashboardStats);
 AdminRouter.get("/overview", adminOverview);
+
+// branding check (what brand.json says and any warnings)
+AdminRouter.get("/brand", adminBrand);
 
 // product categories
 AdminRouter.get("/categories", adminListCategories);
