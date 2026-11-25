@@ -2,6 +2,7 @@ import JobLock from "../models/JobLock.js";
 import ActivityLog from "../models/ActivityLog.js";
 import { createJobLoop } from "./jobLoop.js";
 import { expireUnpaidOrders } from "./orderExpiry.js";
+import Order from "../models/Order.js";
 import { alertOps, errorText, escapeHtml } from "./telegram.js";
 
 /** Takes the named lock for ttlMs. false = another run holds it. */
@@ -51,5 +52,32 @@ export const startJobs = () => {
     },
   });
   expiry.start();
-  console.log("Background jobs started: expire-unpaid every 5 min.");
+
+  // Orders nobody has moved for hours: a shop that is asleep, or a delivery nobody picked up.
+  const stuck = createJobLoop({
+    intervalMs: 30 * 60 * 1000,
+    firstDelayMs: 5 * 60 * 1000,
+    run: async () => {
+      if (!(await acquireLock("stuck-orders", 10 * 60 * 1000))) return;
+      let result: any;
+      try {
+        const hours = Math.max(1, Number(process.env.STUCK_ORDER_HOURS) || 6);
+        const before = new Date(Date.now() - hours * 3600 * 1000);
+        const count = await Order.countDocuments({
+          orderStatus: { $in: ["placed", "processing"] },
+          createdAt: { $lt: before },
+          $or: [{ paymentMethod: "cod" }, { paymentStatus: "paid" }], // unpaid online ones are the expiry job's business
+        });
+        result = { count, hours };
+        if (count > 0) {
+          alertOps(`⏰ ${count} order${count === 1 ? "" : "s"} not moved for over ${hours}h. Check Admin > Orders.`, { key: "stuck-orders", cooldownMs: 6 * 3600 * 1000 });
+        }
+      } finally {
+        await releaseLock("stuck-orders", result).catch(() => {});
+      }
+    },
+    onError: (e) => console.error("stuck-orders job failed:", e),
+  });
+  stuck.start();
+  console.log("Background jobs started: expire-unpaid every 5 min, stuck-orders every 30 min.");
 };

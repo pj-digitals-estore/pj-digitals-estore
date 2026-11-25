@@ -32,15 +32,21 @@ import { shareImage, shareProduct, shareSite } from "./controllers/shareControll
 import { brandFile, brandIcon, brandManifest } from "./controllers/brandController.js";
 import { alertOps, errorText, escapeHtml, sendTelegram } from "./utils/telegram.js";
 import { startJobs } from "./utils/jobs.js";
+import { reportError } from "./utils/errorReport.js";
+import { slowRequests } from "./middleware/slowRequests.js";
 
 // A crash is restarted by Docker; tell the owner first (Telegram is a no-op when not configured).
 process.on("unhandledRejection", async (reason: any) => {
   console.error("Unhandled rejection:", reason);
+  reportError(reason, { level: "error", tags: { where: "unhandledRejection" } });
+  await new Promise((r) => setTimeout(r, 800)); // a moment for the report to leave before restarting
   await sendTelegram(`🔴 <b>API crashed</b> (unhandled rejection, restarting)\n<code>${errorText(reason)}</code>`, { key: "crash", cooldownMs: 60_000 });
   process.exit(1);
 });
 process.on("uncaughtException", async (error: any) => {
   console.error("Uncaught exception:", error);
+  reportError(error, { level: "error", tags: { where: "uncaughtException" } });
+  await new Promise((r) => setTimeout(r, 800));
   await sendTelegram(`🔴 <b>API crashed</b> (uncaught exception, restarting)\n<code>${errorText(error)}</code>`, { key: "crash", cooldownMs: 60_000 });
   process.exit(1);
 });
@@ -49,6 +55,7 @@ const app = express();
 app.set("trust proxy", 1); // behind Vercel / a load balancer
 app.disable("x-powered-by");
 app.use(securityHeaders);
+app.use(slowRequests);
 
 await connectDB();
 await ensureCategories();

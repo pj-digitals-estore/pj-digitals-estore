@@ -1,3 +1,4 @@
+import { publicDsn } from "../utils/errorReport.js";
 import { Request, Response } from "express";
 import User from "../models/User.js";
 import Shop from "../models/Shop.js";
@@ -82,6 +83,7 @@ export const getMeta = async (_req: Request, res: Response) => {
     data: {
       categories: await activeCategoryNames(),
       brand: publicBrand(),
+      monitoring: { dsn: publicDsn() },
       locations: SERVICE_LOCATIONS,
       roles: ROLES,
       orderStatuses: ORDER_STATUSES,
