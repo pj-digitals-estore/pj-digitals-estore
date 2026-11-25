@@ -240,6 +240,7 @@ export const razorpayWebhook = async (req: Request, res: Response) => {
 
       case "payment.failed": {
         // order stays pending so the customer can retry (see /api/payments/create)
+        alertOps(`💳 Payment failed (Razorpay order ${escapeHtml(String(razorpayOrderId || "?"))})`, { key: `payfail:${razorpayOrderId}`, cooldownMs: 10 * 60_000 });
         const one: any = razorpayOrderId && (await Order.findOne({ razorpayOrderId }).select("user orderNumber checkoutId"));
         if (one) {
           await notify(one.user, {

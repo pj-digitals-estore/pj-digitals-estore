@@ -1,3 +1,4 @@
+import { reportError } from "../utils/errorReport.js";
 import { NextFunction, Request, Response } from "express";
 import multer from "multer";
 import { alertOps, errorText, escapeHtml } from "../utils/telegram.js";
@@ -44,6 +45,7 @@ export const errorHandler = (
   if (status >= 500) {
     console.error("Unhandled error:", err);
     const route = `${req.method} ${req.baseUrl}${req.route?.path ?? ""}`;
+    reportError(err, { tags: { route, status } });
     alertOps(`⚠️ <b>${status}</b> ${escapeHtml(route)}\n<code>${errorText(err)}</code>`, { key: `err:${route}` });
   }
   res.status(status).json({

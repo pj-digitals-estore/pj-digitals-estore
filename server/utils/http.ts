@@ -1,4 +1,5 @@
 import { Response } from "express";
+import { reportError } from "./errorReport.js";
 import { alertOps, errorText, escapeHtml } from "./telegram.js";
 
 /**
@@ -31,6 +32,7 @@ export const sendError = (
     message = error.message;
   } else {
     console.error(fallback + ":", error);
+    reportError(error, { tags: { where: fallback } });
     alertOps(`⚠️ <b>500</b> ${escapeHtml(fallback)}\n<code>${errorText(error)}</code>`, { key: `500:${fallback}` });
     if (process.env.NODE_ENV !== "production") {
       message = error?.message || fallback;
