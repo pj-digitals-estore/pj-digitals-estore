@@ -70,6 +70,24 @@ const orderSchema = new mongoose.Schema<IOrder>(
     shippingCost: { type: Number, default: 0 },
     tax: { type: Number, required: true, default: 0 },
     totalAmount: { type: Number, required: true },
+    // fixed at checkout, in integer paise (see utils/money.ts). Older orders don't have it.
+    money: {
+      type: new mongoose.Schema(
+        {
+          version: Number,
+          seller: { type: String, enum: ["shop", "platform"] },
+          rateSource: { type: String, enum: ["shop", "platform_default", "none"] },
+          commissionRate: Number,
+          subtotalPaise: Number,
+          shippingPaise: Number,
+          taxPaise: Number,
+          totalPaise: Number,
+          commissionPaise: Number,
+          sellerPaise: Number,
+        },
+        { _id: false },
+      ),
+    },
     notes: String,
     stockRestored: { type: Boolean, default: false },
     paidAt: Date,

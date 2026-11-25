@@ -1,6 +1,7 @@
 import Order from "../models/Order.js";
 import { round2 } from "./http.js";
 import { getSettings } from "./settings.js";
+import { orderCommission } from "./money.js";
 
 /** The commission rate that applies to a shop: its own override, else the platform default. */
 export const effectiveRate = async (shop: any, override?: any) => {
@@ -25,15 +26,23 @@ export const unsettledFor = async (shop: any, opts: { to?: any; rate?: any } = {
     settlement: { $exists: false },
   };
   if (opts.to) query.deliveredAt = { $lte: new Date(opts.to) };
-  const orders: any[] = await Order.find(query).select("orderNumber subtotal paymentMethod deliveredAt");
+  const orders: any[] = await Order.find(query).select("orderNumber subtotal paymentMethod deliveredAt money");
+  const hasOverride = opts.rate !== undefined && opts.rate !== null && opts.rate !== "";
   const rate = await effectiveRate(shop, opts.rate);
   const grossSales = round2(orders.reduce((s, o) => s + o.subtotal, 0));
   const codAmount = round2(orders.filter((o) => o.paymentMethod === "cod").reduce((s, o) => s + o.subtotal, 0));
-  const commission = round2(grossSales * rate);
+  // each order brings the commission it was given at checkout; only older orders (no snapshot) use today's rate,
+  // and an explicit rate typed by an admin overrides everything
+  const perOrder = orders.map((o) => orderCommission(o, rate, hasOverride ? rate : null));
+  const commission = round2(perOrder.reduce((s, c) => s + c.paise, 0) / 100);
+  const snapshotted = perOrder.filter((c) => c.snapshotted).length;
+  // the rate shown/stored on a settlement: today's rate if nothing was snapshotted, else what was actually charged
+  const shownRate = snapshotted && grossSales > 0 ? Math.round((commission / grossSales) * 10000) / 10000 : rate;
   const dates = orders.map((o) => o.deliveredAt?.getTime()).filter(Boolean) as number[];
   return {
     orders,
-    rate,
+    rate: shownRate,
+    snapshotted, // how many of these orders carry a commission fixed at checkout
     ordersCount: orders.length,
     grossSales,
     codAmount,

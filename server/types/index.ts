@@ -152,6 +152,7 @@ export interface IOrder extends Document {
   shippingCost: number;
   tax: number;
   totalAmount: number;
+  money?: import("../utils/money.js").MoneySnapshot;
   notes?: string;
   stockRestored: boolean;
   paidAt?: Date;

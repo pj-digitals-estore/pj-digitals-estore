@@ -272,7 +272,17 @@ export const payoutsSummary = async (_req: Request, res: Response) => {
   try {
     const rows: any[] = await Order.aggregate([
       { $match: { orderStatus: "delivered", paymentStatus: "paid", settlement: { $exists: false }, shop: { $exists: true } } },
-      { $group: { _id: "$shop", orders: { $sum: 1 }, gross: { $sum: "$subtotal" }, oldest: { $min: "$deliveredAt" } } },
+      {
+        $group: {
+          _id: "$shop",
+          orders: { $sum: 1 },
+          gross: { $sum: "$subtotal" },
+          oldest: { $min: "$deliveredAt" },
+          // orders with a commission fixed at checkout: their commission (paise) and the goods value it covers
+          snapCommissionPaise: { $sum: { $ifNull: ["$money.commissionPaise", 0] } },
+          snapGross: { $sum: { $cond: [{ $ne: [{ $type: "$money.commissionPaise" }, "missing"] }, "$subtotal", 0] } },
+        },
+      },
     ]);
     const shops: any[] = await Shop.find({ _id: { $in: rows.map((r) => r._id) } }).select("name location commissionRate payout");
     const byId = new Map(shops.map((s) => [s._id.toString(), s]));
@@ -281,6 +291,8 @@ export const payoutsSummary = async (_req: Request, res: Response) => {
       .map((r) => {
         const shop = byId.get(r._id.toString());
         const rate = shop?.commissionRate ?? settings.commissionRate;
+        // snapshotted orders keep their own commission; only the rest use today's rate
+        const commission = round2((r.snapCommissionPaise ?? 0) / 100 + (r.gross - (r.snapGross ?? 0)) * rate);
         return {
           shopId: r._id,
           name: shop?.name,
@@ -289,8 +301,8 @@ export const payoutsSummary = async (_req: Request, res: Response) => {
           rate,
           orders: r.orders,
           gross: round2(r.gross),
-          commission: round2(r.gross * rate),
-          net: round2(r.gross - r.gross * rate),
+          commission,
+          net: round2(r.gross - commission),
           oldest: r.oldest,
         };
       })

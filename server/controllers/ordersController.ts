@@ -12,6 +12,8 @@ import {
 } from "../types/index.js";
 import { escapeRegex, HttpError, round2, sendError } from "../utils/http.js";
 import { codBlockReason, computeTotals } from "../utils/pricing.js";
+import { buildMoney } from "../utils/money.js";
+import { claimCheckoutKey, finishCheckoutKey, normalizeKey, releaseCheckoutKey } from "../utils/checkoutKey.js";
 import {
   attachDeliveries,
   cancelReasonLabel,
@@ -132,10 +134,34 @@ export const getOrder = async (req: Request, res: Response) => {
 // (each shop fulfils and is paid separately); orders from the same checkout
 // share a `checkoutId`.
 // POST /api/orders   body: { addressId | shippingAddress, paymentMethod?, notes? }
+/** The reply for a checkout the customer already placed (a retry or double tap with the same key). */
+const replayCheckout = async (req: Request, res: Response, checkoutId: string) => {
+  const orders: any[] = await Order.find({ checkoutId, user: req.user._id }).sort({ createdAt: 1 });
+  if (!orders.length) return res.status(409).json({ success: false, message: "This order was already handled. Check My orders." });
+  const online = orders[0].paymentMethod === "razorpay" && orders.some((o) => o.paymentStatus !== "paid" && o.orderStatus !== "cancelled");
+  const payment = online ? await createCheckoutPayment(orders, req.user) : null;
+  const sum = (k: "subtotal" | "shippingCost" | "tax" | "totalAmount") => round2(orders.reduce((s, o) => s + o[k], 0));
+  const summary = { subtotal: sum("subtotal"), shippingCost: sum("shippingCost"), tax: sum("tax"), totalAmount: sum("totalAmount") };
+  return res.status(200).json({ success: true, data: orders, checkoutId, summary, payment, replayed: true });
+};
+
 export const createOrder = async (req: Request, res: Response) => {
   let reserved: { product: any; quantity: number }[] = [];
   let checkoutId = "";
+  // Idempotency: the app sends one key per checkout attempt (body.idempotencyKey or an Idempotency-Key header).
+  // The same key can never create a second set of orders, even if two requests arrive together.
+  const idemKey = normalizeKey(req.body?.idempotencyKey ?? req.get("idempotency-key"));
+  let keyHeld = false;
+  let succeeded = false;
   try {
+    if (idemKey) {
+      const claim = await claimCheckoutKey(req.user._id, idemKey);
+      if (claim.state === "exists") {
+        if (claim.checkoutId) return await replayCheckout(req, res, claim.checkoutId);
+        return res.status(409).json({ success: false, message: "Your order is already being placed. Please wait a moment." });
+      }
+      keyHeld = true;
+    }
     const paymentMethod = normalizePaymentMethod(req.body.paymentMethod);
     if (!paymentMethod) {
       return res
@@ -252,6 +278,14 @@ export const createOrder = async (req: Request, res: Response) => {
     const orders: any[] = [];
     for (const [shopKey, items] of groups) {
       const subtotal = items.reduce((s, i) => s + i.price * i.quantity, 0);
+      const totals = computeTotals(subtotal, settings);
+      // commission is fixed now: a later change of the shop's rate must not touch this order
+      const shopDoc = shopKey === "platform" ? null : shopById.get(shopKey);
+      const own = shopDoc?.commissionRate;
+      const hasOwn = own !== undefined && own !== null;
+      const who = shopKey === "platform"
+        ? { seller: "platform" as const, rate: 0, source: "none" as const }
+        : { seller: "shop" as const, rate: hasOwn ? own : settings.commissionRate, source: hasOwn ? ("shop" as const) : ("platform_default" as const) };
       const order = await Order.create({
         user: req.user._id,
         shop: shopKey === "platform" ? undefined : shopKey,
@@ -261,7 +295,8 @@ export const createOrder = async (req: Request, res: Response) => {
         paymentMethod,
         paymentOption: String(req.body.paymentMethod || "cod").toLowerCase(),
         paymentStatus: "pending",
-        ...computeTotals(subtotal, settings),
+        ...totals,
+        money: buildMoney(totals, who),
         notes: req.body.notes,
         orderNumber: generateOrderNumber(),
       });
@@ -315,11 +350,16 @@ export const createOrder = async (req: Request, res: Response) => {
         `₹${summary.totalAmount} · ${paymentMethod === "cod" ? "cash on delivery" : "online, awaiting payment"}`,
     );
 
+    if (idemKey) await finishCheckoutKey(req.user._id, idemKey, checkoutId);
+    succeeded = true;
     res.status(201).json({ success: true, data: orders, checkoutId, summary, payment });
   } catch (error) {
     if (checkoutId) await Order.deleteMany({ checkoutId, paymentStatus: "pending" }).catch(() => {});
     if (reserved.length) await restoreStockLines(reserved).catch(() => {});
     sendError(res, error, "Failed to create order");
+  } finally {
+    // any early "no" (empty cart, no stock, ...) frees the key so a corrected retry is allowed
+    if (keyHeld && !succeeded) await releaseCheckoutKey(req.user._id, idemKey as string).catch(() => {});
   }
 };
 
