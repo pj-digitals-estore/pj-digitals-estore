@@ -10,6 +10,7 @@ import { payoutLabel, toCsv, unsettledFor } from "../utils/payouts.js";
 import { logActivity } from "../utils/activity.js";
 import { notify } from "../utils/notify.js";
 import { restoreOrderStock } from "../utils/orderHelpers.js";
+import { expireUnpaidOrders as expireUnpaid } from "../utils/orderExpiry.js";
 
 const TZ = "Asia/Kolkata";
 
@@ -214,34 +215,13 @@ export const reconciliation = async (req: Request, res: Response) => {
 };
 
 // POST /api/admin/orders/expire-unpaid   body: { minutes? = 30 }
-// Cancels online orders that were never paid and gives their stock back.
-// Call it from a cron (e.g. Vercel Cron) every few minutes.
+// Cancels online orders that were never paid and gives their stock back. The server now does this by itself
+// every 5 minutes (utils/jobs.ts); this endpoint stays for running it by hand.
 export const expireUnpaidOrders = async (req: Request, res: Response) => {
   try {
-    const minutes = Math.max(5, Number(req.body.minutes) || 30);
-    const cutoff = new Date(Date.now() - minutes * 60 * 1000);
-    const orders: any[] = await Order.find({
-      paymentMethod: "razorpay",
-      paymentStatus: "pending",
-      orderStatus: { $in: ["placed", "processing"] },
-      createdAt: { $lt: cutoff },
-    }).limit(200);
-
-    for (const order of orders) {
-      order.orderStatus = "cancelled";
-      order.paymentStatus = "failed";
-      order.cancelledAt = new Date();
-      await order.save();
-      await restoreOrderStock(order._id);
-      await notify(order.user, {
-        type: "payment",
-        title: "Order cancelled - payment not completed",
-        body: order.orderNumber,
-        data: { orderId: order._id },
-      });
-    }
-    await logActivity(req, "orders.expired_unpaid", "Order", undefined, { count: orders.length, minutes });
-    res.json({ success: true, expired: orders.length });
+    const result = await expireUnpaid(req.body?.minutes);
+    await logActivity(req, "orders.expired_unpaid", "Order", undefined, { count: result.expired, minutes: result.minutes });
+    res.json({ success: true, expired: result.expired });
   } catch (error) {
     sendError(res, error, "Failed to expire unpaid orders");
   }

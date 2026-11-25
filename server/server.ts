@@ -31,6 +31,7 @@ import { apiLimiter, brandLimiter, orderLimiter, reviewLimiter, securityHeaders,
 import { shareImage, shareProduct, shareSite } from "./controllers/shareController.js";
 import { brandFile, brandIcon, brandManifest } from "./controllers/brandController.js";
 import { alertOps, errorText, escapeHtml, sendTelegram } from "./utils/telegram.js";
+import { startJobs } from "./utils/jobs.js";
 
 // A crash is restarted by Docker; tell the owner first (Telegram is a no-op when not configured).
 process.on("unhandledRejection", async (reason: any) => {
@@ -132,6 +133,7 @@ await makeAdmin();
 if (!process.env.VERCEL) {
   app.listen(port, () => {
     console.log(`Server is running at http://localhost:${port}`);
+    startJobs();
     alertOps(`🟢 API started (${escapeHtml(process.env.NODE_ENV || "development")})`, { key: "boot", cooldownMs: 30_000 });
   });
 }

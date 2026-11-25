@@ -26,7 +26,7 @@ Lists accept `?page=&limit=` and return `pagination: { total, page, pages }`.
 1. `POST /api/orders` with an online `paymentMethod` -> response `payment` = `{ keyId, razorpayOrderId, amount (paise), currency, checkoutId, prefill }`. Open the Razorpay sheet with it.
 2. On success the sheet returns `razorpay_order_id, razorpay_payment_id, razorpay_signature` -> `POST /api/payments/verify` with those three. Orders become `paymentStatus: "paid"`.
 3. Payment abandoned/failed: `POST /api/payments/create { checkoutId }` returns a fresh `payment` object to retry.
-4. Unpaid online orders are cancelled and their stock released by `POST /api/admin/orders/expire-unpaid` (run it from a cron every ~5 minutes).
+4. Unpaid online orders are cancelled and their stock released automatically every 5 minutes (and by hand via `POST /api/admin/orders/expire-unpaid`).
 5. Razorpay dashboard webhook -> `POST /api/razorpay/webhook`; events: `payment.captured`, `order.paid`, `payment.failed`, `refund.processed`.
 
 ## Shop-owner app
