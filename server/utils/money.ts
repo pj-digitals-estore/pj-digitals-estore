@@ -15,6 +15,7 @@ export type MoneySnapshot = {
   shippingPaise: number;
   taxPaise: number;
   totalPaise: number;
+  discountPaise?: number; // coupon discount (paid by the platform; the shop is still owed sellerPaise)
   commissionPaise: number; // taken from the goods subtotal only (not delivery, not tax)
   sellerPaise: number; // subtotal - commission: what the shop is owed for the goods
 };
@@ -32,7 +33,7 @@ export const commissionPaiseOf = (subtotalPaise: number, rate: unknown) => {
 };
 
 export const buildMoney = (
-  totals: { subtotal: number; shippingCost: number; tax: number; totalAmount: number },
+  totals: { subtotal: number; shippingCost: number; tax: number; totalAmount: number; discount?: number },
   who: { seller: "shop" | "platform"; rate: unknown; source: MoneySnapshot["rateSource"] },
 ): MoneySnapshot => {
   const subtotalPaise = paiseOf(totals.subtotal);
@@ -48,6 +49,7 @@ export const buildMoney = (
     shippingPaise: paiseOf(totals.shippingCost),
     taxPaise: paiseOf(totals.tax),
     totalPaise: paiseOf(totals.totalAmount),
+    ...(totals.discount ? { discountPaise: paiseOf(totals.discount) } : {}),
     commissionPaise,
     sellerPaise: subtotalPaise - commissionPaise,
   };

@@ -33,6 +33,7 @@ import { logActivity } from "../utils/activity.js";
 import { getSettings } from "../utils/settings.js";
 import { codeForCustomer } from "../utils/deliveryOtp.js";
 import { ensureInvoice } from "../utils/invoices.js";
+import { claimCoupon, evaluateForUser, releaseCoupon } from "../utils/couponService.js";
 import { razorpayConfigured } from "../utils/razorpay.js";
 import { createCheckoutPayment } from "./paymentController.js";
 
@@ -180,6 +181,7 @@ export const createOrder = async (req: Request, res: Response) => {
   const idemKey = normalizeKey(req.body?.idempotencyKey ?? req.get("idempotency-key"));
   let keyHeld = false;
   let succeeded = false;
+  let couponClaimed = false;
   try {
     if (idemKey) {
       const claim = await claimCheckoutKey(req.user._id, idemKey);
@@ -286,7 +288,18 @@ export const createOrder = async (req: Request, res: Response) => {
     const rule = await deliveryRuleFor(shippingAddress.location, settings);
     const delivery = quoteDelivery(subtotals.reduce((a, b) => a + b, 0), rule);
     if (!delivery.ok) return res.status(400).json({ success: false, message: delivery.reason });
-    const allTotals = checkoutTotals(subtotals, delivery.fee, settings);
+    // Coupon: checked on the whole cart's goods total. A code that was typed but doesn't work stops the
+    // order (the customer must not be charged full price after seeing a discount).
+    let coupon: any = null;
+    let couponDiscount = 0;
+    const typedCode = typeof req.body.couponCode === "string" ? req.body.couponCode.trim() : "";
+    if (typedCode) {
+      const result = await evaluateForUser(typedCode, req.user._id, subtotals.reduce((a, b) => a + b, 0));
+      if (!result.ok) return res.status(400).json({ success: false, message: result.reason });
+      coupon = result.coupon;
+      couponDiscount = result.discount;
+    }
+    const allTotals = checkoutTotals(subtotals, delivery.fee, settings, couponDiscount);
 
     // COD limit: checked on the whole checkout BEFORE any stock is reserved
     if (paymentMethod === "cod" && Number(settings.codMaxAmount) > 0) {
@@ -308,6 +321,10 @@ export const createOrder = async (req: Request, res: Response) => {
     reserved = orderItems;
 
     checkoutId = generateCheckoutId();
+    if (coupon) {
+      await claimCoupon(coupon, req.user._id, checkoutId, couponDiscount);
+      couponClaimed = true;
+    }
     const orders: any[] = [];
     for (const [index, shopKey] of shopKeys.entries()) {
       const items = groups.get(shopKey)!;
@@ -329,6 +346,7 @@ export const createOrder = async (req: Request, res: Response) => {
         paymentOption: String(req.body.paymentMethod || "cod").toLowerCase(),
         paymentStatus: "pending",
         ...totals,
+        ...(totals.discount > 0 ? { couponCode: coupon?.code } : {}),
         money: buildMoney(totals, who),
         notes: req.body.notes,
         orderNumber: generateOrderNumber(),
@@ -374,6 +392,7 @@ export const createOrder = async (req: Request, res: Response) => {
     const summary = {
       subtotal: round2(orders.reduce((s, o) => s + o.subtotal, 0)),
       shippingCost: round2(orders.reduce((s, o) => s + o.shippingCost, 0)),
+      discount: round2(orders.reduce((s, o) => s + (o.discount || 0), 0)),
       tax: round2(orders.reduce((s, o) => s + o.tax, 0)),
       totalAmount: round2(orders.reduce((s, o) => s + o.totalAmount, 0)),
     };
@@ -388,6 +407,7 @@ export const createOrder = async (req: Request, res: Response) => {
     res.status(201).json({ success: true, data: orders, checkoutId, summary, payment });
   } catch (error) {
     if (checkoutId) await Order.deleteMany({ checkoutId, paymentStatus: "pending" }).catch(() => {});
+    if (couponClaimed && checkoutId) await releaseCoupon(checkoutId, true).catch(() => {});
     if (reserved.length) await restoreStockLines(reserved).catch(() => {});
     sendError(res, error, "Failed to create order");
   } finally {
@@ -454,7 +474,16 @@ export const getQuote = async (req: Request, res: Response) => {
     const subtotals = sorted.map((g) => g.items.reduce((s: number, i: any) => s + i.price * i.quantity, 0));
     // one fee for the whole checkout; each shop's group shows its share so the lines add up
     const delivery = quoteDelivery(subtotals.reduce((a, b) => a + b, 0), rule);
-    const totals = checkoutTotals(subtotals, delivery.fee, settings);
+    // a typed coupon is priced here too; a bad one is reported (couponError) but doesn't block the cart
+    let couponInfo: any = null;
+    let couponError: string | null = null;
+    const typed = typeof req.query.coupon === "string" ? req.query.coupon.trim() : "";
+    if (typed) {
+      const result = await evaluateForUser(typed, req.user._id, subtotals.reduce((a, b) => a + b, 0));
+      if (result.ok) couponInfo = { code: result.coupon.code, description: result.coupon.description, discount: result.discount };
+      else couponError = result.reason;
+    }
+    const totals = checkoutTotals(subtotals, delivery.fee, settings, couponInfo?.discount ?? 0);
     const groups = sorted.map((g, i) => ({
       shop: g.shop && { _id: g.shop._id, name: g.shop.name, logo: g.shop.logo, location: g.shop.location, isOpen: g.shop.isOpen },
       items: g.items,
@@ -462,14 +491,14 @@ export const getQuote = async (req: Request, res: Response) => {
     }));
     if (!delivery.ok && delivery.reason) issues.push({ productId: null, name: "", message: delivery.reason.replace(/\.$/, "") });
 
-    const sum = (k: "subtotal" | "shippingCost" | "tax" | "totalAmount") => round2(groups.reduce((s, g) => s + g[k], 0));
-    const summary = { subtotal: sum("subtotal"), shippingCost: sum("shippingCost"), tax: sum("tax"), totalAmount: sum("totalAmount"), orders: groups.length };
+    const sum = (k: "subtotal" | "discount" | "shippingCost" | "tax" | "totalAmount") => round2(groups.reduce((s, g) => s + g[k], 0));
+    const summary = { subtotal: sum("subtotal"), discount: sum("discount"), shippingCost: sum("shippingCost"), tax: sum("tax"), totalAmount: sum("totalAmount"), orders: groups.length };
     const deliveryInfo = { location: rule.location, fee: delivery.fee, ok: delivery.ok, reason: delivery.reason, freeAbove: delivery.freeAbove, addForFree: delivery.addForFree, minOrder: delivery.minOrder };
     const codWhy = codBlockReason(settings, summary.totalAmount);
 
     res.json({
       success: true,
-      data: { ...base, empty: false, groups, issues, summary, delivery: deliveryInfo, canCheckout: issues.length === 0 && groups.length > 0, cod: { ...base.cod, allowed: !codWhy, reason: codWhy } },
+      data: { ...base, empty: false, groups, issues, summary, delivery: deliveryInfo, coupon: couponInfo, couponError, canCheckout: issues.length === 0 && groups.length > 0, cod: { ...base.cod, allowed: !codWhy, reason: codWhy } },
     });
   } catch (error) {
     sendError(res, error, "Failed to price your cart");

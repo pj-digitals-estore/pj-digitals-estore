@@ -1,6 +1,7 @@
 import Order from "../models/Order.js";
 import { restoreOrderStock } from "./orderHelpers.js";
 import { notify } from "./notify.js";
+import { releaseCoupon } from "./couponService.js";
 import { clampExpiryMinutes } from "./jobLoop.js";
 
 /**
@@ -30,6 +31,7 @@ export const expireUnpaidOrders = async (minutesRaw?: unknown) => {
     );
     if (!order) continue; // paid or changed in the meantime: leave it alone
     await restoreOrderStock(order._id);
+    if (order.checkoutId) await releaseCoupon(order.checkoutId).catch(() => {});
     await notify(order.user, {
       type: "payment",
       title: "Order cancelled - payment not completed",

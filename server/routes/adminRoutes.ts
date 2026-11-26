@@ -76,6 +76,7 @@ import {
   adminReorderLocations,
   adminUpdateLocation,
 } from "../controllers/locationController.js";
+import { adminCreateCoupon, adminDeleteCoupon, adminListCoupons, adminUpdateCoupon } from "../controllers/couponController.js";
 import {
   adminCancelRefund,
   adminCompleteRefund,
@@ -161,6 +162,10 @@ AdminRouter.put("/tickets/:id", validateObjectId("id"), adminUpdateTicket);
 
 // payments, reports, settlements
 AdminRouter.get("/payments", listPayments);
+AdminRouter.get("/coupons", adminListCoupons);
+AdminRouter.post("/coupons", adminCreateCoupon);
+AdminRouter.put("/coupons/:id", validateObjectId("id"), adminUpdateCoupon);
+AdminRouter.delete("/coupons/:id", validateObjectId("id"), adminDeleteCoupon);
 AdminRouter.get("/refunds", adminListRefunds);
 AdminRouter.post("/refunds", adminCreateRefund);
 AdminRouter.put("/refunds/:id/complete", validateObjectId("id"), adminCompleteRefund);

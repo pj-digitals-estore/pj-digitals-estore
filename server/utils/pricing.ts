@@ -13,6 +13,8 @@ export const computeTotals = (
   settings: Pick<PlatformSettings, "shippingCost" | "freeShippingThreshold" | "taxRate"> & Partial<Pick<PlatformSettings, "gstRegistered">>,
   /** When given, this is the delivery amount for the order (its share of the checkout's single fee) instead of the flat settings rule. */
   shippingOverride?: number,
+  /** Coupon discount on the goods (platform-paid). Tax is worked out on what the customer actually pays for the goods. */
+  discount = 0,
 ) => {
   const flat = Number(settings.shippingCost);
   const threshold = Number(settings.freeShippingThreshold);
@@ -23,19 +25,21 @@ export const computeTotals = (
       ? shippingOverride
       : threshold > 0 && subtotal >= threshold ? 0 : Number.isFinite(flat) ? flat : 0;
   // An unregistered seller must not charge GST, so a leftover tax rate does nothing until GST is switched on.
-  const tax = settings.gstRegistered ? round2(subtotal * (Number.isFinite(taxRate) ? taxRate : 0)) : 0;
-  const totalAmount = round2(subtotal + shippingCost + tax);
+  const off = Math.min(Math.max(0, round2(discount)), subtotal);
+  const tax = settings.gstRegistered ? round2((subtotal - off) * (Number.isFinite(taxRate) ? taxRate : 0)) : 0;
+  const totalAmount = round2(subtotal - off + shippingCost + tax);
 
-  return { subtotal: round2(subtotal), shippingCost, tax, totalAmount };
+  return { subtotal: round2(subtotal), discount: off, shippingCost, tax, totalAmount };
 };
 
 /**
  * Totals for every shop order of ONE checkout. The checkout has a single delivery fee (from the delivery
  * location's rule); each shop order carries its share so slips, payouts and refunds still add up.
  */
-export const checkoutTotals = (subtotals: number[], fee: number, settings: Parameters<typeof computeTotals>[1]) => {
+export const checkoutTotals = (subtotals: number[], fee: number, settings: Parameters<typeof computeTotals>[1], discount = 0) => {
   const shares = splitFee(fee, subtotals);
-  return subtotals.map((s, i) => computeTotals(s, settings, shares[i]));
+  const off = splitFee(discount, subtotals); // the coupon is shared across the shop orders the same way
+  return subtotals.map((s, i) => computeTotals(s, settings, shares[i], off[i]));
 };
 
 /** Razorpay expects amounts in the smallest currency unit (paise). */
