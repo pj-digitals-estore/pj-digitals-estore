@@ -6,7 +6,8 @@ import Order from "../models/Order.js";
 import Delivery from "../models/Delivery.js";
 import DeliveryPartner from "../models/DeliveryPartner.js";
 import Advertisement from "../models/Advertisement.js";
-import { PAYMENT_STATUSES, SERVICE_LOCATIONS, SHOP_STATUSES, PARTNER_STATUSES, VEHICLE_TYPES } from "../types/index.js";
+import { PAYMENT_STATUSES, SHOP_STATUSES, PARTNER_STATUSES, VEHICLE_TYPES } from "../types/index.js";
+import { locationListText, onlyKnownLocations, resolveLocation } from "../utils/locations.js";
 import { HttpError, round2, sendError } from "../utils/http.js";
 import { destroyImages, uploadImage } from "../utils/imageStore.js";
 import { notify } from "../utils/notify.js";
@@ -69,10 +70,12 @@ export const adminCreateShop = async (req: Request, res: Response) => {
     if (await Shop.exists({ owner: owner._id })) throw new HttpError(409, "That user already owns a shop");
     const { name, phone, location } = req.body;
     if (!name?.trim() || !phone?.trim()) throw new HttpError(400, "name and phone are required");
-    if (!(SERVICE_LOCATIONS as readonly string[]).includes(location)) throw new HttpError(400, `location must be one of: ${SERVICE_LOCATIONS.join(", ")}`);
+    const resolvedLocation = await resolveLocation(location);
+    if (!resolvedLocation) throw new HttpError(400, `location must be one of: ${await locationListText()}`);
 
     const data: Record<string, any> = {};
     for (const f of SHOP_FIELDS) if (req.body[f] !== undefined) data[f] = req.body[f];
+    data.location = resolvedLocation;
     if (req.body.categories !== undefined) data.categories = parseList(req.body.categories);
     const coords = parseCoordinates(req.body.coordinates);
     if (coords) data.coordinates = coords;
@@ -113,8 +116,10 @@ export const adminUpdateShop = async (req: Request, res: Response) => {
     if (!shop) throw new HttpError(404, "Shop not found");
     const b = req.body;
     for (const f of SHOP_FIELDS) if (b[f] !== undefined) shop[f] = b[f];
-    if (b.location !== undefined && !(SERVICE_LOCATIONS as readonly string[]).includes(b.location)) {
-      throw new HttpError(400, `location must be one of: ${SERVICE_LOCATIONS.join(", ")}`);
+    if (b.location !== undefined) {
+      const loc = await resolveLocation(b.location, shop.location);
+      if (!loc) throw new HttpError(400, `location must be one of: ${await locationListText()}`);
+      shop.location = loc;
     }
     if (b.categories !== undefined) shop.categories = parseList(b.categories);
     if (b.coordinates !== undefined) shop.coordinates = parseCoordinates(b.coordinates);
@@ -227,7 +232,7 @@ export const adminCreateDriver = async (req: Request, res: Response) => {
     const driver: any = await DeliveryPartner.create({
       ...data,
       user: user._id,
-      serviceLocations: parseList(req.body.serviceLocations).filter((l) => (SERVICE_LOCATIONS as readonly string[]).includes(l)),
+      serviceLocations: await onlyKnownLocations(parseList(req.body.serviceLocations)),
       photo,
       status: "approved",
       approvedAt: new Date(),
@@ -252,7 +257,7 @@ export const adminUpdateDriver = async (req: Request, res: Response) => {
     const b = req.body;
     for (const f of DRIVER_FIELDS) if (b[f] !== undefined) driver[f] = b[f];
     if (b.vehicleType !== undefined && !(VEHICLE_TYPES as readonly string[]).includes(b.vehicleType)) throw new HttpError(400, `vehicleType must be one of: ${VEHICLE_TYPES.join(", ")}`);
-    if (b.serviceLocations !== undefined) driver.serviceLocations = parseList(b.serviceLocations).filter((l) => (SERVICE_LOCATIONS as readonly string[]).includes(l));
+    if (b.serviceLocations !== undefined) driver.serviceLocations = await onlyKnownLocations(parseList(b.serviceLocations));
     if (b.isAvailable !== undefined) driver.isAvailable = b.isAvailable === true || b.isAvailable === "true";
     if (b.payout !== undefined) driver.payout = b.payout ? (({ bankName, ...r }: any) => r)(cleanPayoutAccount(b.payout)) : undefined;
     if (b.status !== undefined && b.status !== driver.status) {

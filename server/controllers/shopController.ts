@@ -3,7 +3,8 @@ import Shop from "../models/Shop.js";
 import Product from "../models/Products.js";
 import Order from "../models/Order.js";
 import Settlement from "../models/Settlement.js";
-import { ORDER_STATUSES, SERVICE_LOCATIONS } from "../types/index.js";
+import { ORDER_STATUSES } from "../types/index.js";
+import { locationListText, resolveLocation } from "../utils/locations.js";
 import { escapeRegex, sendError } from "../utils/http.js";
 import { destroyImages, uploadImage } from "../utils/imageStore.js";
 import { attachDeliveries, cancelReasonLabel, readCancelInfo, transitionOrder } from "../utils/orderHelpers.js";
@@ -143,12 +144,14 @@ export const applyForShop = async (req: Request, res: Response) => {
         .status(400)
         .json({ success: false, message: "name and phone are required" });
     }
-    if (!(SERVICE_LOCATIONS as readonly string[]).includes(data.location)) {
+    const loc = await resolveLocation(data.location);
+    if (!loc) {
       return res.status(400).json({
         success: false,
-        message: `location must be one of: ${SERVICE_LOCATIONS.join(", ")}`,
+        message: `location must be one of: ${await locationListText()}`,
       });
     }
+    data.location = loc;
 
     const file = req.file as Express.Multer.File | undefined;
     if (file) logo = (await uploadImage(file, "pj-digitals-estore/shops")).secure_url;
@@ -190,11 +193,15 @@ export const updateMyShop = async (req: Request, res: Response) => {
     const shop = req.shop;
     const updates = pickProfile(req.body);
 
-    if (updates.location && !(SERVICE_LOCATIONS as readonly string[]).includes(updates.location)) {
-      return res.status(400).json({
-        success: false,
-        message: `location must be one of: ${SERVICE_LOCATIONS.join(", ")}`,
-      });
+    if (updates.location) {
+      const loc = await resolveLocation(updates.location, shop.location); // keeping the current one is always allowed
+      if (!loc) {
+        return res.status(400).json({
+          success: false,
+          message: `location must be one of: ${await locationListText()}`,
+        });
+      }
+      updates.location = loc;
     }
 
     const file = req.file as Express.Multer.File | undefined;

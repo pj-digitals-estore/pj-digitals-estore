@@ -1,5 +1,5 @@
 import mongoose, { Schema } from "mongoose";
-import { AD_STATUSES, SERVICE_LOCATIONS, AD_PLACEMENTS } from "../types/index.js";
+import { AD_STATUSES, AD_PLACEMENTS } from "../types/index.js";
 
 const adSchema = new Schema(
   {
@@ -8,7 +8,7 @@ const adSchema = new Schema(
     description: { type: String, trim: true },
     image: { type: String },
     product: { type: Schema.Types.ObjectId, ref: "Product" }, // optional deep link
-    targetLocations: [{ type: String, enum: SERVICE_LOCATIONS }], // empty = everywhere
+    targetLocations: [{ type: String }], // empty = everywhere
     placements: { type: [{ type: String, enum: AD_PLACEMENTS }], default: ["home"] },
     priority: { type: Number, default: 0 }, // higher shows first (admin-controlled)
     impressions: { type: Number, default: 0 },

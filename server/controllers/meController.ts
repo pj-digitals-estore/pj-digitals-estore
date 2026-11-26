@@ -1,3 +1,4 @@
+import { activeLocationNames } from "../utils/locations.js";
 import { publicDsn } from "../utils/errorReport.js";
 import { Request, Response } from "express";
 import User from "../models/User.js";
@@ -15,7 +16,6 @@ import {
   PAYMENT_METHODS,
   PAYMENT_STATUSES,
   ROLES,
-  SERVICE_LOCATIONS,
   SETTLEMENT_STATUSES,
   SHOP_STATUSES,
   TICKET_CATEGORIES,
@@ -84,7 +84,7 @@ export const getMeta = async (_req: Request, res: Response) => {
       categories: await activeCategoryNames(),
       brand: publicBrand(),
       monitoring: { dsn: publicDsn() },
-      locations: SERVICE_LOCATIONS,
+      locations: await activeLocationNames(),
       roles: ROLES,
       orderStatuses: ORDER_STATUSES,
       paymentStatuses: PAYMENT_STATUSES,

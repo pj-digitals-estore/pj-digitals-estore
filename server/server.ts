@@ -26,6 +26,7 @@ import {
 import { errorHandler, notFound } from "./middleware/validate.js";
 import { health, healthDetails } from "./controllers/healthController.js";
 import { ensureCategories } from "./utils/categories.js";
+import { ensureLocations } from "./utils/locations.js";
 import { MEDIA_DIR } from "./utils/imageStore.js";
 import { apiLimiter, brandLimiter, orderLimiter, reviewLimiter, securityHeaders, shareLimiter, supportLimiter, trackingLimiter, writeLimiter } from "./middleware/security.js";
 import { shareImage, shareProduct, shareSite } from "./controllers/shareController.js";
@@ -59,6 +60,7 @@ app.use(slowRequests);
 
 await connectDB();
 await ensureCategories();
+await ensureLocations();
 
 // Webhooks need the RAW body for signature verification, so they must be
 // registered BEFORE express.json().

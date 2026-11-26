@@ -1,5 +1,5 @@
 import mongoose, { Schema } from "mongoose";
-import { PARTNER_STATUSES, SERVICE_LOCATIONS, VEHICLE_TYPES } from "../types/index.js";
+import { PARTNER_STATUSES, VEHICLE_TYPES } from "../types/index.js";
 
 const partnerSchema = new Schema(
   {
@@ -9,7 +9,7 @@ const partnerSchema = new Schema(
     vehicleType: { type: String, enum: VEHICLE_TYPES, default: "bike" },
     vehicleNumber: { type: String, trim: true },
     licenseNumber: { type: String, trim: true },
-    serviceLocations: [{ type: String, enum: SERVICE_LOCATIONS }],
+    serviceLocations: [{ type: String }],
     photo: String,
     status: { type: String, enum: PARTNER_STATUSES, default: "pending", index: true },
     statusReason: String,
