@@ -100,7 +100,7 @@ const canManage = (req: Request, res: Response, product: any) => {
 // --------------------------------------------------
 // GET ALL PRODUCTS
 // GET /api/products?page=&limit=&search=&category=&minPrice=&maxPrice=
-//     &featured=true&inStock=true&sort=newest|price_asc|price_desc|name|rating
+//     &featured=true&assured=true&inStock=true&sort=newest|price_asc|price_desc|name|rating
 //     &shop=<shopId>&location=Thodupuzha|Muttom
 // Admins may add &includeInactive=true
 // --------------------------------------------------
@@ -117,7 +117,7 @@ export const getProducts = async (req: Request, res: Response) => {
   try {
     const page = Math.max(1, Number(req.query.page) || 1);
     const limit = Math.min(100, Math.max(1, Number(req.query.limit) || 10));
-    const { search, category, minPrice, maxPrice, featured, inStock, sort, shop, location } =
+    const { search, category, minPrice, maxPrice, featured, assured, inStock, sort, shop, location } =
       req.query;
 
     const query: any = {};
@@ -157,6 +157,7 @@ export const getProducts = async (req: Request, res: Response) => {
     }
 
     if (featured === "true") query.isFeatured = true;
+    if (assured === "true") query.isAssured = true;
     if (inStock === "true") query.stock = { $gt: 0 };
 
     const sortBy = SORTS[String(sort)] || SORTS.newest;
@@ -250,6 +251,7 @@ export const createProduct = async (req: Request, res: Response) => {
         data.shop = shop._id;
       }
       if (req.body.isFeatured !== undefined) data.isFeatured = req.body.isFeatured;
+      if (req.body.isAssured !== undefined) data.isAssured = req.body.isAssured === true || req.body.isAssured === "true";
     }
 
     const uploaded = await Promise.all(files.map((f) => uploadImage(f)));
@@ -310,6 +312,7 @@ export const updateProduct = async (req: Request, res: Response) => {
 
     if (isAdmin(req)) {
       if (req.body.isFeatured !== undefined) updates.isFeatured = req.body.isFeatured;
+      if (req.body.isAssured !== undefined) updates.isAssured = req.body.isAssured === true || req.body.isAssured === "true";
       if (req.body.shop !== undefined) {
         if (req.body.shop === "" || req.body.shop === "null") {
           updates.shop = null;

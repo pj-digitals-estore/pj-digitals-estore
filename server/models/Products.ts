@@ -32,6 +32,7 @@ const productSchema = new Schema<IProduct>(
     },
     stock: { type: Number, required: true, default: 0, min: 0 },
     isFeatured: { type: Boolean, default: false },
+    isAssured: { type: Boolean, default: false }, // the platform vouches for this product (set by admin only)
     isActive: { type: Boolean, default: true },
   },
   { timestamps: true },
