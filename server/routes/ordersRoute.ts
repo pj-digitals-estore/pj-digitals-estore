@@ -3,6 +3,7 @@ import {
   cancelOrder,
   createOrder,
   getAllOrders,
+  getInvoice,
   getOrder,
   getOrders,
   getQuote,
@@ -26,6 +27,7 @@ OrderRouter.put("/:id/status", authorize("admin"), validateObjectId("id"), updat
 
 OrderRouter.get("/:id", validateObjectId("id"), getOrder);
 OrderRouter.get("/:id/tracking", validateObjectId("id"), getOrderTracking);
+OrderRouter.post("/:id/invoice", validateObjectId("id"), getInvoice);
 OrderRouter.put("/:id/cancel", validateObjectId("id"), cancelOrder);
 
 export default OrderRouter;

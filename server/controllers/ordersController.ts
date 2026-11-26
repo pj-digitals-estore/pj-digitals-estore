@@ -32,6 +32,7 @@ import { alertOps, escapeHtml } from "../utils/telegram.js";
 import { logActivity } from "../utils/activity.js";
 import { getSettings } from "../utils/settings.js";
 import { codeForCustomer } from "../utils/deliveryOtp.js";
+import { ensureInvoice } from "../utils/invoices.js";
 import { razorpayConfigured } from "../utils/razorpay.js";
 import { createCheckoutPayment } from "./paymentController.js";
 
@@ -137,6 +138,22 @@ export const getOrder = async (req: Request, res: Response) => {
     return res.json({ success: true, data: code ? { ...withDelivery, deliveryCode: code } : withDelivery });
   } catch (error) {
     sendError(res, error, "Failed to fetch order");
+  }
+};
+
+// POST /api/orders/:id/invoice   the customer (or an admin) asks for the invoice of a delivered order.
+// Gives it its number if it has none yet (orders delivered before invoices existed), then returns the order.
+export const getInvoice = async (req: Request, res: Response) => {
+  try {
+    const base: any = await Order.findById(req.params.id).select("user orderStatus");
+    if (!base) return res.status(404).json({ success: false, message: "Order not found" });
+    if (String(base.user) !== String(req.user._id) && req.user.role !== "admin") return res.status(403).json({ success: false, message: "Not authorized" });
+    if (base.orderStatus !== "delivered") return res.status(400).json({ success: false, message: "The invoice is available once the order is delivered." });
+    await ensureInvoice(base._id);
+    const order = await Order.findById(base._id).populate("items.product", "name").populate("shop", "name phone location addressLine");
+    res.json({ success: true, data: order });
+  } catch (error) {
+    sendError(res, error, "Failed to prepare the invoice");
   }
 };
 

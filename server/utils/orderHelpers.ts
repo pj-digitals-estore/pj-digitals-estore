@@ -5,6 +5,7 @@ import { CANCEL_REASONS, IOrder, OrderStatus } from "../types/index.js";
 import { HttpError } from "./http.js";
 import { logMovements } from "./stockLog.js";
 import { recordPayment } from "./ledger.js";
+import { ensureInvoice } from "./invoices.js";
 
 export const generateOrderNumber = () =>
   "ORD-" +
@@ -169,6 +170,7 @@ export const transitionOrder = async (
 
   await order.save();
   if (next === "delivered" && order.paymentMethod === "cod" && order.paymentStatus === "paid") await recordPayment(order);
+  if (next === "delivered") await ensureInvoice(order._id).catch((e) => console.error("invoice number failed:", e)); // never blocks the delivery
   if (next === "cancelled") await restoreOrderStock(order._id);
   return order;
 };
