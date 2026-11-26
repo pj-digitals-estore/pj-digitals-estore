@@ -3,7 +3,8 @@ import DeliveryPartner from "../models/DeliveryPartner.js";
 import Delivery from "../models/Delivery.js";
 import Order from "../models/Order.js";
 import Shop from "../models/Shop.js";
-import { SERVICE_LOCATIONS, VEHICLE_TYPES } from "../types/index.js";
+import { VEHICLE_TYPES } from "../types/index.js";
+import { onlyKnownLocations } from "../utils/locations.js";
 import { sendError } from "../utils/http.js";
 import { destroyImages, uploadImage } from "../utils/imageStore.js";
 import { notify, notifyAdmins } from "../utils/notify.js";
@@ -12,7 +13,7 @@ import { getSettings } from "../utils/settings.js";
 
 const ACTIVE = ["assigned", "accepted", "picked_up", "on_the_way"];
 
-const parseLocations = (value: any): string[] => {
+const parseLocations = async (value: any): Promise<string[]> => {
   if (!value) return [];
   let list: any = value;
   if (typeof value === "string") {
@@ -22,9 +23,7 @@ const parseLocations = (value: any): string[] => {
       list = value.split(",");
     }
   }
-  return (Array.isArray(list) ? list : [list])
-    .map((s: any) => String(s).trim())
-    .filter((s: string) => (SERVICE_LOCATIONS as readonly string[]).includes(s));
+  return onlyKnownLocations((Array.isArray(list) ? list : [list]).map((s: any) => String(s).trim()));
 };
 
 const PROFILE_FIELDS = ["fullName", "phone", "vehicleType", "vehicleNumber", "licenseNumber"] as const;
@@ -59,7 +58,7 @@ export const applyAsDriver = async (req: Request, res: Response) => {
     const partner = await DeliveryPartner.create({
       ...data,
       user: req.user._id,
-      serviceLocations: parseLocations(req.body.serviceLocations),
+      serviceLocations: await parseLocations(req.body.serviceLocations),
       photo,
       status: "pending",
     });
@@ -90,7 +89,7 @@ export const updateMyProfile = async (req: Request, res: Response) => {
     const driver = req.driver;
     for (const f of PROFILE_FIELDS) if (req.body[f] !== undefined) driver.set(f, req.body[f]);
     if (req.body.serviceLocations !== undefined) {
-      driver.serviceLocations = parseLocations(req.body.serviceLocations);
+      driver.serviceLocations = await parseLocations(req.body.serviceLocations);
     }
     const file = req.file as Express.Multer.File | undefined;
     const oldPhoto = driver.photo;

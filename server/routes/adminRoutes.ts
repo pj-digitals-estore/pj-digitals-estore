@@ -70,6 +70,13 @@ import {
   adminUpdateCategory,
 } from "../controllers/categoryController.js";
 import {
+  adminCreateLocation,
+  adminDeleteLocation,
+  adminListLocations,
+  adminReorderLocations,
+  adminUpdateLocation,
+} from "../controllers/locationController.js";
+import {
   adminListTickets,
   adminUpdateTicket,
 } from "../controllers/supportController.js";
@@ -84,6 +91,13 @@ AdminRouter.get("/overview", adminOverview);
 
 // branding check (what brand.json says and any warnings)
 AdminRouter.get("/brand", adminBrand);
+
+// service locations
+AdminRouter.get("/locations", adminListLocations);
+AdminRouter.post("/locations", adminCreateLocation);
+AdminRouter.put("/locations/order", adminReorderLocations); // before "/:id"
+AdminRouter.put("/locations/:id", validateObjectId("id"), adminUpdateLocation);
+AdminRouter.delete("/locations/:id", validateObjectId("id"), adminDeleteLocation);
 
 // product categories
 AdminRouter.get("/categories", adminListCategories);

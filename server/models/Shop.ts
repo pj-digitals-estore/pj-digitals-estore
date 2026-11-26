@@ -1,5 +1,5 @@
 import mongoose, { Schema } from "mongoose";
-import { SERVICE_LOCATIONS, SHOP_STATUSES, PAYOUT_METHODS } from "../types/index.js";
+import { SHOP_STATUSES, PAYOUT_METHODS } from "../types/index.js";
 
 const shopSchema = new Schema(
   {
@@ -12,7 +12,7 @@ const shopSchema = new Schema(
     email: { type: String, trim: true, lowercase: true },
     addressLine: { type: String, trim: true },
     landmark: { type: String, trim: true },
-    location: { type: String, enum: SERVICE_LOCATIONS, required: true, index: true },
+    location: { type: String, required: true, index: true }, // a name from the admin-managed Location list
     coordinates: { lat: Number, lng: Number },
     logo: String,
     banner: String,

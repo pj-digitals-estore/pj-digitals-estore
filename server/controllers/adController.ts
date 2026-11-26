@@ -1,14 +1,15 @@
 import { Request, Response } from "express";
 import Advertisement from "../models/Advertisement.js";
-import { AD_PLACEMENTS, AD_STATUSES, SERVICE_LOCATIONS } from "../types/index.js";
+import { AD_PLACEMENTS, AD_STATUSES } from "../types/index.js";
 import Shop from "../models/Shop.js";
 import Product from "../models/Products.js";
+import { onlyKnownLocations } from "../utils/locations.js";
 import { sendError } from "../utils/http.js";
 import { destroyImages, uploadImage } from "../utils/imageStore.js";
 import { notify, notifyAdmins } from "../utils/notify.js";
 import { logActivity } from "../utils/activity.js";
 
-const parseLocations = (value: any): string[] => {
+const parseLocations = async (value: any): Promise<string[]> => {
   if (!value) return [];
   let list: any = value;
   if (typeof value === "string") {
@@ -18,9 +19,7 @@ const parseLocations = (value: any): string[] => {
       list = value.split(",");
     }
   }
-  return (Array.isArray(list) ? list : [list])
-    .map((s: any) => String(s).trim())
-    .filter((s: string) => (SERVICE_LOCATIONS as readonly string[]).includes(s));
+  return onlyKnownLocations((Array.isArray(list) ? list : [list]).map((s: any) => String(s).trim()));
 };
 
 const parsePlacements = (value: any): string[] => {
@@ -148,10 +147,6 @@ export const createAd = async (req: Request, res: Response) => {
       return res.status(400).json({ success: false, message: "That product doesn't belong to your shop" });
     }
 
-    if (product && !(await Product.exists({ _id: product, shop: req.shop._id }))) {
-      return res.status(400).json({ success: false, message: "That product doesn't belong to your shop" });
-    }
-
     const draft = req.body.draft === true || req.body.draft === "true";
     const ad = await Advertisement.create({
       shop: req.shop._id,
@@ -160,7 +155,7 @@ export const createAd = async (req: Request, res: Response) => {
       description,
       image,
       product: product || undefined,
-      targetLocations: parseLocations(req.body.targetLocations),
+      targetLocations: await parseLocations(req.body.targetLocations),
       startsAt: startsAt || undefined,
       endsAt: endsAt || undefined,
       status: draft ? "draft" : "pending",
@@ -199,7 +194,7 @@ export const updateAd = async (req: Request, res: Response) => {
     if (endsAt !== undefined) ad.endsAt = endsAt || undefined;
     if (product !== undefined) ad.product = product || undefined;
     if (req.body.targetLocations !== undefined) {
-      ad.targetLocations = parseLocations(req.body.targetLocations);
+      ad.targetLocations = await parseLocations(req.body.targetLocations);
     }
     if (req.body.placements !== undefined) {
       const p = parsePlacements(req.body.placements);
@@ -366,7 +361,7 @@ export const adminCreateAd = async (req: Request, res: Response) => {
       image,
       product: product || undefined,
       placements: parsePlacements(req.body.placements).length ? parsePlacements(req.body.placements) : ["home"],
-      targetLocations: parseLocations(req.body.targetLocations),
+      targetLocations: await parseLocations(req.body.targetLocations),
       startsAt: startsAt || undefined,
       endsAt: endsAt || undefined,
       priority: Number(req.body.priority) || 0,
@@ -396,7 +391,7 @@ export const adminUpdateAd = async (req: Request, res: Response) => {
     if (b.endsAt !== undefined) ad.endsAt = b.endsAt || undefined;
     if (b.product !== undefined) ad.product = b.product || undefined;
     if (b.priority !== undefined) ad.priority = Number(b.priority) || 0;
-    if (b.targetLocations !== undefined) ad.targetLocations = parseLocations(b.targetLocations);
+    if (b.targetLocations !== undefined) ad.targetLocations = await parseLocations(b.targetLocations);
     if (b.placements !== undefined) {
       const p = parsePlacements(b.placements);
       ad.placements = p.length ? p : ["home"];
