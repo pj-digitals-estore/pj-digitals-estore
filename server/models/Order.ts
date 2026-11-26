@@ -40,6 +40,8 @@ const orderSchema = new mongoose.Schema<IOrder>(
       country: { type: String, required: true },
       location: String,
       landmark: String,
+      latitude: Number,
+      longitude: Number,
     },
     // one order per shop; orders created in one checkout share a checkoutId
     shop: { type: mongoose.Schema.Types.ObjectId, ref: "Shop", index: true },

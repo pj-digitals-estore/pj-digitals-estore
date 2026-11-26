@@ -3,6 +3,7 @@ import Shop from "../models/Shop.js";
 import Address from "../models/Address.js";
 import DeliveryPartner from "../models/DeliveryPartner.js";
 import { SERVICE_LOCATIONS } from "../types/index.js";
+import { ruleFor } from "./deliveryPricing.js";
 import { cleanLocationName, locationKey, matchLocations } from "./locationNames.js";
 
 export { cleanLocationName, locationKey, locationNameProblem, matchLocations } from "./locationNames.js";
@@ -38,6 +39,25 @@ export const resolveLocation = async (raw: unknown, current?: string): Promise<s
 
 /** A list a client sent -> only the real, active names (duplicates and unknowns dropped). */
 export const onlyKnownLocations = async (sent: unknown[]): Promise<string[]> => matchLocations(sent, await activeLocationNames());
+
+/** The delivery rule that applies to a delivery location name (the platform default when it is empty or unknown). */
+export const deliveryRuleFor = async (name: string | undefined | null, settings: { shippingCost: number; freeShippingThreshold: number }) => {
+  let loc: any = null;
+  if (name) {
+    try { loc = await Location.findOne({ nameKey: locationKey(name) }).lean(); } catch { loc = null; }
+  }
+  return ruleFor(loc, settings);
+};
+
+/** Delivery rules of the offered locations, for the storefront ("minimum order ₹100", "not delivering to X"). */
+export const activeDeliveryRules = async (settings: { shippingCost: number; freeShippingThreshold: number }) => {
+  try {
+    const rows: any[] = await Location.find({ isActive: true }).sort({ order: 1, name: 1 }).lean();
+    return rows.map((l) => { const r = ruleFor(l, settings); return { name: l.name, enabled: r.enabled, fee: r.fee, freeAbove: r.freeAbove, minOrder: r.minOrder }; });
+  } catch {
+    return [];
+  }
+};
 
 export const locationListText = async () => (await activeLocationNames()).join(", ");
 

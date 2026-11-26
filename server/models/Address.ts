@@ -19,6 +19,8 @@ const AddressSchema = new mongoose.Schema<IAddress>({
   country: { type: String, required: true, trim: true, default: "India" },
   location: { type: String, trim: true }, // service location (Thodupuzha / Muttom)
   landmark: { type: String, trim: true },
+  latitude: { type: Number, min: -90, max: 90 }, // optional map pin (helps the driver find the door)
+  longitude: { type: Number, min: -180, max: 180 },
   isDefault: { type: Boolean, default: false },
   createdAt: { type: Date, default: Date.now },
 });

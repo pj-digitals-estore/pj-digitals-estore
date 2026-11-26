@@ -57,6 +57,8 @@ export const assignDelivery = async (
       zipCode: a.zipCode,
       location: a.location,
       landmark: a.landmark,
+      latitude: a.latitude,
+      longitude: a.longitude,
     },
     // cash the driver must collect on delivery
     codAmount:

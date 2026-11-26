@@ -1,13 +1,31 @@
 import Address from "../models/Address.js";
 import { Request, Response } from "express";
-import { sendError } from "../utils/http.js";
+import { HttpError, sendError } from "../utils/http.js";
+import { cleanCoords } from "../utils/deliveryPricing.js";
+import { locationListText, resolveLocation } from "../utils/locations.js";
 
 const FIELDS = ["type", "fullName", "phone", "street", "city", "state", "zipCode", "country", "location", "landmark"] as const;
 
-const pickFields = (body: any) => {
+const pickFields = async (body: any, currentLocation?: string) => {
   const out: Record<string, any> = {};
   for (const f of FIELDS) {
     if (body[f] !== undefined) out[f] = typeof body[f] === "string" ? body[f].trim() : body[f];
+  }
+  // the delivery location must be one the admin offers (an address that already has one keeps it)
+  if (out.location !== undefined && out.location !== "") {
+    const real = await resolveLocation(out.location, currentLocation);
+    if (!real) throw new HttpError(400, `Please choose a delivery location: ${await locationListText()}`);
+    out.location = real;
+  }
+  // optional map pin; sending null/empty clears it, a bad pin is refused
+  if (body.latitude !== undefined || body.longitude !== undefined) {
+    const empty = (v: unknown) => v === null || v === "" || v === undefined;
+    if (empty(body.latitude) && empty(body.longitude)) { out.latitude = undefined; out.longitude = undefined; }
+    else {
+      const pin = cleanCoords(body.latitude, body.longitude);
+      if (!pin) throw new HttpError(400, "The map pin is not valid");
+      Object.assign(out, pin);
+    }
   }
   return out;
 };
@@ -30,7 +48,7 @@ export const getAddress = async (req: Request, res: Response) => {
 // POST /api/address
 export const addAddress = async (req: Request, res: Response) => {
   try {
-    const data = pickFields(req.body);
+    const data = await pickFields(req.body);
     const existingCount = await Address.countDocuments({ user: req.user._id });
 
     // first address is always the default
@@ -78,7 +96,7 @@ export const updateAddress = async (req: Request, res: Response) => {
       address.isDefault = true;
     }
 
-    address.set(pickFields(req.body));
+    address.set(await pickFields(req.body, address.location));
     await address.save();
 
     res.json({ success: true, data: address });
