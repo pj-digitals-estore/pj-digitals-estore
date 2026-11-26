@@ -31,6 +31,8 @@ import { notify } from "../utils/notify.js";
 import { alertOps, escapeHtml } from "../utils/telegram.js";
 import { logActivity } from "../utils/activity.js";
 import { getSettings } from "../utils/settings.js";
+import Refund from "../models/Refund.js";
+import { refundView } from "../utils/refundView.js";
 import { codeForCustomer } from "../utils/deliveryOtp.js";
 import { ensureInvoice } from "../utils/invoices.js";
 import { claimCoupon, evaluateForUser, releaseCoupon } from "../utils/couponService.js";
@@ -96,7 +98,10 @@ export const getOrders = async (req: Request, res: Response) => {
 
     const mode = (await getSettings()).deliveryOtp;
     // the customer's own delivery code, only while the order is on its way
-    const data = (await attachDeliveries(orders)).map((o: any) => ({ ...o, deliveryCode: codeForCustomer(o, mode) }));
+    const refunds: any[] = await Refund.find({ order: { $in: orders.map((o) => o._id) }, status: { $in: ["pending", "completed"] } }).select("order status amountPaise reference completedAt").lean();
+    const byOrder = new Map<string, any[]>();
+    for (const r of refunds) byOrder.set(String(r.order), [...(byOrder.get(String(r.order)) || []), r]);
+    const data = (await attachDeliveries(orders)).map((o: any) => ({ ...o, deliveryCode: codeForCustomer(o, mode), refund: refundView(byOrder.get(String(o._id)) || [], o) }));
     res.json({ success: true, data });
   } catch (error) {
     sendError(res, error, "Failed to fetch orders");

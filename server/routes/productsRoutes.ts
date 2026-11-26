@@ -5,6 +5,7 @@ import {
   deleteProduct,
   getProduct,
   getProducts,
+  suggestProducts,
   updateProduct,
 } from "../controllers/productController.js";
 import upload from "../middleware/upload.js";
@@ -22,6 +23,7 @@ const ProductRouter = express.Router();
 
 // Public (optionalAuth lets admins see inactive products)
 ProductRouter.get("/", optionalAuth, getProducts);
+ProductRouter.get("/suggest", suggestProducts); // before "/:id"
 ProductRouter.get("/:id", validateObjectId("id"), optionalAuth, getProduct);
 
 // Admin / approved shop owner - auth runs BEFORE multer so anonymous users can't push uploads

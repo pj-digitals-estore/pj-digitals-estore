@@ -191,6 +191,7 @@ export interface IProduct extends Document {
   ratings: { average: number; count: number };
   stock: number;
   isFeatured: boolean;
+  isAssured?: boolean;
   isActive: boolean;
   createdAt: Date;
   updatedAt: Date;
