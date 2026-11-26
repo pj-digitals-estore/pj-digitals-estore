@@ -60,6 +60,7 @@ const orderSchema = new mongoose.Schema<IOrder>(
       default: "pending",
     },
     currency: { type: String, default: "INR" },
+    refundedPaise: { type: Number, default: 0, min: 0 }, // total paid back to the customer so far (see Refund / LedgerEntry)
     razorpayOrderId: { type: String, index: true, sparse: true },
     razorpayPaymentId: { type: String },
     razorpaySignature: { type: String },

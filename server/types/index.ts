@@ -150,6 +150,7 @@ export interface IOrder extends Document {
   // Razorpay fields (filled in once Razorpay is integrated)
   razorpayOrderId?: string;
   razorpayPaymentId?: string;
+  refundedPaise?: number;
   razorpaySignature?: string;
   orderStatus: OrderStatus;
   subtotal: number;

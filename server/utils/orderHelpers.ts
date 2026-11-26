@@ -4,6 +4,7 @@ import Delivery from "../models/Delivery.js";
 import { CANCEL_REASONS, IOrder, OrderStatus } from "../types/index.js";
 import { HttpError } from "./http.js";
 import { logMovements } from "./stockLog.js";
+import { recordPayment } from "./ledger.js";
 
 export const generateOrderNumber = () =>
   "ORD-" +
@@ -69,7 +70,7 @@ export const markOrderPaid = async (
   orderId: any,
   payment: { razorpayPaymentId?: string; razorpaySignature?: string } = {},
 ): Promise<IOrder | null> => {
-  return Order.findOneAndUpdate(
+  const order = await Order.findOneAndUpdate(
     { _id: orderId, paymentStatus: { $ne: "paid" }, orderStatus: { $ne: "cancelled" } },
     {
       paymentStatus: "paid",
@@ -79,6 +80,8 @@ export const markOrderPaid = async (
     },
     { new: true },
   );
+  if (order) await recordPayment(order); // the money book (never throws)
+  return order;
 };
 
 /**
@@ -98,7 +101,10 @@ export const markCheckoutPaid = async (
       ...(payment.razorpaySignature && { razorpaySignature: payment.razorpaySignature }),
     },
   );
-  return Order.find({ razorpayOrderId });
+  const orders = await Order.find({ razorpayOrderId });
+  // write the money-in entry for every paid order of the checkout (a repeat is ignored)
+  for (const o of orders) if (o.paymentStatus === "paid") await recordPayment(o);
+  return orders;
 };
 
 // Which status changes each kind of actor may make
@@ -162,6 +168,7 @@ export const transitionOrder = async (
   }
 
   await order.save();
+  if (next === "delivered" && order.paymentMethod === "cod" && order.paymentStatus === "paid") await recordPayment(order);
   if (next === "cancelled") await restoreOrderStock(order._id);
   return order;
 };

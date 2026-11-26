@@ -12,6 +12,7 @@ import { HttpError, round2, sendError } from "../utils/http.js";
 import { destroyImages, uploadImage } from "../utils/imageStore.js";
 import { notify } from "../utils/notify.js";
 import { logActivity } from "../utils/activity.js";
+import { recordPayment } from "../utils/ledger.js";
 import { setUserRole } from "../utils/roles.js";
 import { getSettings, saveSettings } from "../utils/settings.js";
 import { transitionOrder } from "../utils/orderHelpers.js";
@@ -366,6 +367,7 @@ export const adminSetPaymentStatus = async (req: Request, res: Response) => {
   try {
     const { paymentStatus } = req.body;
     if (!(PAYMENT_STATUSES as readonly string[]).includes(paymentStatus)) throw new HttpError(400, `paymentStatus must be one of: ${PAYMENT_STATUSES.join(", ")}`);
+    if (paymentStatus === "refunded") throw new HttpError(400, "To refund a customer, use Admin > Refunds. It records the refund in the money book.");
     const order: any = await Order.findById(req.params.id);
     if (!order) throw new HttpError(404, "Order not found");
     if (order.settlement) throw new HttpError(400, "This order is already in a settlement");
@@ -373,6 +375,7 @@ export const adminSetPaymentStatus = async (req: Request, res: Response) => {
     order.paymentStatus = paymentStatus;
     if (paymentStatus === "paid" && !order.paidAt) order.paidAt = new Date();
     await order.save();
+    if (paymentStatus === "paid") await recordPayment(order, req.user?._id);
     await notify(order.user, { type: "payment", title: `Payment ${paymentStatus}`, body: order.orderNumber, data: { orderId: order._id } });
     await logActivity(req, "order.payment_overridden", "Order", order._id, { from: before, to: paymentStatus, note: req.body.note });
     res.json({ success: true, data: order });
