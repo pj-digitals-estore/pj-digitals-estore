@@ -92,6 +92,8 @@ export interface IAddress extends Document {
   country: string;
   location?: string; // service location, e.g. Thodupuzha / Muttom
   landmark?: string;
+  latitude?: number;
+  longitude?: number;
   isDefault: boolean;
   createdAt: Date;
 }
@@ -135,6 +137,8 @@ export interface IOrder extends Document {
     country: string;
     location?: string;
     landmark?: string;
+    latitude?: number;
+    longitude?: number;
   };
   shop?: Types.ObjectId;
   checkoutId?: string;

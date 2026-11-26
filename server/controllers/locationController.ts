@@ -73,6 +73,16 @@ export const adminUpdateLocation = async (req: Request, res: Response) => {
       }
       loc.isActive = on;
     }
+    if (req.body.deliveryEnabled !== undefined) loc.deliveryEnabled = req.body.deliveryEnabled === true || req.body.deliveryEnabled === "true";
+    // delivery rules: a number (rupees) or empty = use the platform setting
+    for (const f of ["deliveryFee", "freeAbove", "minOrder"] as const) {
+      if (req.body[f] === undefined) continue;
+      const v = req.body[f];
+      if (v === null || v === "") { loc[f] = null; continue; }
+      const n = Number(v);
+      if (!Number.isFinite(n) || n < 0 || n > 100000) throw new HttpError(400, `${f === "deliveryFee" ? "Delivery fee" : f === "freeAbove" ? "Free delivery above" : "Minimum order"} must be a number, 0 or more`);
+      loc[f] = Math.round(n * 100) / 100;
+    }
     if (req.body.name !== undefined) {
       const name = cleanLocationName(req.body.name);
       if (name !== oldName) {
@@ -89,7 +99,7 @@ export const adminUpdateLocation = async (req: Request, res: Response) => {
     await loc.save();
     if (renamed) await renameEverywhere(oldName, loc.name);
     invalidateLocations();
-    await logActivity(req, "location.updated", "Location", loc._id, { from: oldName, to: loc.name, isActive: loc.isActive });
+    await logActivity(req, "location.updated", "Location", loc._id, { from: oldName, to: loc.name, isActive: loc.isActive, deliveryEnabled: loc.deliveryEnabled, deliveryFee: loc.deliveryFee, freeAbove: loc.freeAbove, minOrder: loc.minOrder });
     res.json({ success: true, data: loc, renamed });
   } catch (error: any) {
     if (error?.code === 11000) return void res.status(409).json({ success: false, message: "That location already exists" });

@@ -1,4 +1,4 @@
-import { activeLocationNames } from "../utils/locations.js";
+import { activeDeliveryRules, activeLocationNames } from "../utils/locations.js";
 import { publicDsn } from "../utils/errorReport.js";
 import { Request, Response } from "express";
 import User from "../models/User.js";
@@ -85,6 +85,7 @@ export const getMeta = async (_req: Request, res: Response) => {
       brand: publicBrand(),
       monitoring: { dsn: publicDsn() },
       locations: await activeLocationNames(),
+      deliveryRules: await activeDeliveryRules({ shippingCost: Number(settings?.shippingCost ?? 0), freeShippingThreshold: Number(settings?.freeShippingThreshold ?? 0) }),
       roles: ROLES,
       orderStatuses: ORDER_STATUSES,
       paymentStatuses: PAYMENT_STATUSES,
@@ -98,7 +99,7 @@ export const getMeta = async (_req: Request, res: Response) => {
       supportPhone: settings?.supportPhone ?? "",
       supportEmail: settings?.supportEmail ?? "",
       freeShippingThreshold: settings?.freeShippingThreshold ?? 0,
-      shippingCost: settings?.shippingCost ?? 0, // flat delivery fee per shop order
+      shippingCost: settings?.shippingCost ?? 0, // default delivery fee per CHECKOUT (a location can override it)
       codMaxAmount: settings?.codMaxAmount ?? 0,
       gstRegistered: settings?.gstRegistered ?? false,
       gstin: settings?.gstRegistered ? settings.gstin : "",

@@ -11,7 +11,9 @@ import {
   PaymentMethod,
 } from "../types/index.js";
 import { escapeRegex, HttpError, round2, sendError } from "../utils/http.js";
-import { codBlockReason, computeTotals } from "../utils/pricing.js";
+import { checkoutTotals, codBlockReason, computeTotals } from "../utils/pricing.js";
+import { cleanCoords, quoteDelivery } from "../utils/deliveryPricing.js";
+import { deliveryRuleFor } from "../utils/locations.js";
 import { buildMoney } from "../utils/money.js";
 import { claimCheckoutKey, finishCheckoutKey, normalizeKey, releaseCheckoutKey } from "../utils/checkoutKey.js";
 import {
@@ -66,11 +68,13 @@ const resolveShippingAddress = async (req: Request) => {
   }
   if (!src) throw new HttpError(400, "Shipping address is required");
 
-  const address: Record<string, string> = {};
+  const address: Record<string, any> = {};
   for (const f of ADDRESS_FIELDS) {
     if (src[f] !== undefined && src[f] !== null) address[f] = String(src[f]).trim();
   }
   address.country = address.country || "India";
+  const pin = cleanCoords(src.latitude, src.longitude);
+  if (pin) Object.assign(address, pin); // a map pin is the only non-text value on an address
 
   for (const f of ["street", "city", "state", "zipCode"]) {
     if (!address[f]) throw new HttpError(400, `Shipping address: ${f} is required`);
@@ -244,12 +248,26 @@ export const createOrder = async (req: Request, res: Response) => {
       });
     }
 
+    // group by shop (one order per shop)
+    const groups = new Map<string, any[]>();
+    for (const item of orderItems) {
+      const list = groups.get(item.shop) ?? [];
+      list.push(item);
+      groups.set(item.shop, list);
+    }
+    const shopKeys = [...groups.keys()];
+    const subtotals = shopKeys.map((k) => groups.get(k)!.reduce((s, i) => s + i.price * i.quantity, 0));
+
+    // ONE delivery fee for the whole checkout, from the delivery location's rules. Refused here (before any
+    // stock is reserved) when we don't deliver there or the minimum order isn't reached.
+    const rule = await deliveryRuleFor(shippingAddress.location, settings);
+    const delivery = quoteDelivery(subtotals.reduce((a, b) => a + b, 0), rule);
+    if (!delivery.ok) return res.status(400).json({ success: false, message: delivery.reason });
+    const allTotals = checkoutTotals(subtotals, delivery.fee, settings);
+
     // COD limit: checked on the whole checkout BEFORE any stock is reserved
     if (paymentMethod === "cod" && Number(settings.codMaxAmount) > 0) {
-      const perShop = new Map<string, number>();
-      for (const i of orderItems) perShop.set(i.shop, (perShop.get(i.shop) ?? 0) + i.price * i.quantity);
-      const total = [...perShop.values()].reduce((sum, sub) => sum + computeTotals(sub, settings).totalAmount, 0);
-      const why = codBlockReason(settings, total);
+      const why = codBlockReason(settings, allTotals.reduce((sum, t) => sum + t.totalAmount, 0));
       if (why) return res.status(400).json({ success: false, message: why });
     }
 
@@ -266,19 +284,11 @@ export const createOrder = async (req: Request, res: Response) => {
     }
     reserved = orderItems;
 
-    // group by shop
-    const groups = new Map<string, any[]>();
-    for (const item of orderItems) {
-      const list = groups.get(item.shop) ?? [];
-      list.push(item);
-      groups.set(item.shop, list);
-    }
-
     checkoutId = generateCheckoutId();
     const orders: any[] = [];
-    for (const [shopKey, items] of groups) {
-      const subtotal = items.reduce((s, i) => s + i.price * i.quantity, 0);
-      const totals = computeTotals(subtotal, settings);
+    for (const [index, shopKey] of shopKeys.entries()) {
+      const items = groups.get(shopKey)!;
+      const totals = allTotals[index];
       // commission is fixed now: a later change of the shop's rate must not touch this order
       const shopDoc = shopKey === "platform" ? null : shopById.get(shopKey);
       const own = shopDoc?.commissionRate;
@@ -371,7 +381,11 @@ export const getQuote = async (req: Request, res: Response) => {
   try {
     const settings = await getSettings();
     const cart: any = await Cart.findOne({ user: req.user._id }).populate("items.product");
-    const threshold = Number(settings.freeShippingThreshold) || 0;
+    // The delivery location decides the fee: the address chosen at checkout (?addressId=), else the default one.
+    const wanted = typeof req.query.addressId === "string" && req.query.addressId ? { _id: req.query.addressId, user: req.user._id } : { user: req.user._id, isDefault: true };
+    const addr: any = await Address.findOne(wanted).select("location").lean().catch(() => null);
+    const rule = await deliveryRuleFor(addr?.location, settings);
+    const threshold = rule.freeAbove;
     const base = {
       gstRegistered: settings.gstRegistered,
       freeShippingThreshold: threshold,
@@ -413,27 +427,26 @@ export const getQuote = async (req: Request, res: Response) => {
       byShop.set(key, g);
     }
 
-    const groups = [...byShop.values()]
-      .sort((a, b) => (a.shop?.name ?? "￿").localeCompare(b.shop?.name ?? "￿"))
-      .map((g) => {
-        const subtotal = g.items.reduce((s: number, i: any) => s + i.price * i.quantity, 0);
-        const t = computeTotals(subtotal, settings);
-        return {
-          shop: g.shop && { _id: g.shop._id, name: g.shop.name, logo: g.shop.logo, location: g.shop.location, isOpen: g.shop.isOpen },
-          items: g.items,
-          ...t,
-          // how much more from this shop makes delivery free (null when it already is, or the offer is off)
-          addForFreeDelivery: threshold > 0 && subtotal < threshold && t.shippingCost > 0 ? round2(threshold - subtotal) : null,
-        };
-      });
+    const sorted = [...byShop.values()].sort((a, b) => (a.shop?.name ?? "￿").localeCompare(b.shop?.name ?? "￿"));
+    const subtotals = sorted.map((g) => g.items.reduce((s: number, i: any) => s + i.price * i.quantity, 0));
+    // one fee for the whole checkout; each shop's group shows its share so the lines add up
+    const delivery = quoteDelivery(subtotals.reduce((a, b) => a + b, 0), rule);
+    const totals = checkoutTotals(subtotals, delivery.fee, settings);
+    const groups = sorted.map((g, i) => ({
+      shop: g.shop && { _id: g.shop._id, name: g.shop.name, logo: g.shop.logo, location: g.shop.location, isOpen: g.shop.isOpen },
+      items: g.items,
+      ...totals[i],
+    }));
+    if (!delivery.ok && delivery.reason) issues.push({ productId: null, name: "", message: delivery.reason.replace(/\.$/, "") });
 
     const sum = (k: "subtotal" | "shippingCost" | "tax" | "totalAmount") => round2(groups.reduce((s, g) => s + g[k], 0));
     const summary = { subtotal: sum("subtotal"), shippingCost: sum("shippingCost"), tax: sum("tax"), totalAmount: sum("totalAmount"), orders: groups.length };
+    const deliveryInfo = { location: rule.location, fee: delivery.fee, ok: delivery.ok, reason: delivery.reason, freeAbove: delivery.freeAbove, addForFree: delivery.addForFree, minOrder: delivery.minOrder };
     const codWhy = codBlockReason(settings, summary.totalAmount);
 
     res.json({
       success: true,
-      data: { ...base, empty: false, groups, issues, summary, canCheckout: issues.length === 0 && groups.length > 0, cod: { ...base.cod, allowed: !codWhy, reason: codWhy } },
+      data: { ...base, empty: false, groups, issues, summary, delivery: deliveryInfo, canCheckout: issues.length === 0 && groups.length > 0, cod: { ...base.cod, allowed: !codWhy, reason: codWhy } },
     });
   } catch (error) {
     sendError(res, error, "Failed to price your cart");

@@ -1,4 +1,5 @@
 import { round2 } from "./http.js";
+import { splitFee } from "./deliveryPricing.js";
 import type { PlatformSettings } from "./settings.js";
 
 /**
@@ -10,18 +11,31 @@ import type { PlatformSettings } from "./settings.js";
 export const computeTotals = (
   subtotal: number,
   settings: Pick<PlatformSettings, "shippingCost" | "freeShippingThreshold" | "taxRate"> & Partial<Pick<PlatformSettings, "gstRegistered">>,
+  /** When given, this is the delivery amount for the order (its share of the checkout's single fee) instead of the flat settings rule. */
+  shippingOverride?: number,
 ) => {
   const flat = Number(settings.shippingCost);
   const threshold = Number(settings.freeShippingThreshold);
   const taxRate = Number(settings.taxRate);
 
   const shippingCost =
-    threshold > 0 && subtotal >= threshold ? 0 : Number.isFinite(flat) ? flat : 0;
+    shippingOverride !== undefined
+      ? shippingOverride
+      : threshold > 0 && subtotal >= threshold ? 0 : Number.isFinite(flat) ? flat : 0;
   // An unregistered seller must not charge GST, so a leftover tax rate does nothing until GST is switched on.
   const tax = settings.gstRegistered ? round2(subtotal * (Number.isFinite(taxRate) ? taxRate : 0)) : 0;
   const totalAmount = round2(subtotal + shippingCost + tax);
 
   return { subtotal: round2(subtotal), shippingCost, tax, totalAmount };
+};
+
+/**
+ * Totals for every shop order of ONE checkout. The checkout has a single delivery fee (from the delivery
+ * location's rule); each shop order carries its share so slips, payouts and refunds still add up.
+ */
+export const checkoutTotals = (subtotals: number[], fee: number, settings: Parameters<typeof computeTotals>[1]) => {
+  const shares = splitFee(fee, subtotals);
+  return subtotals.map((s, i) => computeTotals(s, settings, shares[i]));
 };
 
 /** Razorpay expects amounts in the smallest currency unit (paise). */

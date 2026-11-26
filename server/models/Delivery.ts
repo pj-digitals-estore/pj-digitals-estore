@@ -26,6 +26,8 @@ const deliverySchema = new Schema(
       zipCode: String,
       location: String,
       landmark: String,
+      latitude: Number, // the customer's map pin, when they shared one
+      longitude: Number,
     },
     codAmount: { type: Number, default: 0 }, // cash the driver must collect
     timeline: [
