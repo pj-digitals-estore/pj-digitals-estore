@@ -6,6 +6,7 @@ import StockMovement, { MOVEMENT_REASONS } from "../models/StockMovement.js";
 import { escapeRegex, round2, sendError } from "../utils/http.js";
 import { getSettings } from "../utils/settings.js";
 import { toCsv } from "../utils/payouts.js";
+import { lookupOnline } from "../utils/barcodeOnline.js";
 import { normalizeBarcode } from "../utils/catalog.js";
 import { logMovements, MovementReason } from "../utils/stockLog.js";
 import { Existing, FIELD_OF, IMPORT_TEMPLATE, parseCsv, planImport } from "../utils/csvImport.js";
@@ -126,7 +127,9 @@ export const lookupBarcode = async (req: Request, res: Response) => {
       Product.findOne({ shop: req.shop._id, barcode }).select("+costPrice"),
       CatalogItem.findOne({ barcode }),
     ]);
-    res.json({ success: true, data: { barcode, inShop, catalog } });
+    // not known to us at all: ask Open Food Facts for a suggestion (never blocks: 3 second limit, errors ignored)
+    const online = !inShop && !catalog ? await lookupOnline(barcode) : null;
+    res.json({ success: true, data: { barcode, inShop, catalog, online } });
   } catch (error) {
     sendError(res, error, "Barcode lookup failed");
   }
