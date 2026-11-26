@@ -2,7 +2,8 @@ import { Request, Response } from "express";
 import Product from "../models/Products.js";
 import Shop from "../models/Shop.js";
 import { resolveCategory } from "../utils/categories.js";
-import { escapeRegex, sendError } from "../utils/http.js";
+import { sendError } from "../utils/http.js";
+import { rankDocs } from "../utils/search.js";
 import { cloneImage, destroyImages, ImageError, uploadImage } from "../utils/imageStore.js";
 import CatalogItem from "../models/CatalogItem.js";
 import { cleanExtras, rememberInCatalog } from "../utils/catalog.js";
@@ -105,6 +106,9 @@ const canManage = (req: Request, res: Response, product: any) => {
 // Admins may add &includeInactive=true
 // --------------------------------------------------
 
+/** How many products (matching the filters) a search looks through. Plenty for a town-sized catalogue. */
+const SEARCH_POOL = 5000;
+
 const SORTS: Record<string, any> = {
   newest: { createdAt: -1, _id: -1 },
   price_asc: { price: 1, _id: 1 },
@@ -145,11 +149,6 @@ export const getProducts = async (req: Request, res: Response) => {
       query.shop = String(shop);
     }
 
-    if (search) {
-      const rx = new RegExp(escapeRegex(String(search).trim()), "i");
-      query.$or = [{ name: rx }, { description: rx }, { brand: rx }];
-    }
-
     if (minPrice !== undefined || maxPrice !== undefined) {
       query.price = {};
       if (minPrice !== undefined && !isNaN(Number(minPrice))) query.price.$gte = Number(minPrice);
@@ -161,6 +160,24 @@ export const getProducts = async (req: Request, res: Response) => {
     if (inStock === "true") query.stock = { $gt: 0 };
 
     const sortBy = SORTS[String(sort)] || SORTS.newest;
+
+    // Search: forgiving of word order, partial words and typos, best match first (utils/search.ts).
+    // Unless the customer picked another sort, results stay in relevance order.
+    const searchText = typeof search === "string" ? search.trim() : "";
+    if (searchText) {
+      const pool: any[] = await Product.find(query).select("name brand category sku barcode description").sort({ createdAt: -1 }).limit(SEARCH_POOL).lean();
+      for (const d of pool) if (typeof d.description === "string" && d.description.length > 300) d.description = d.description.slice(0, 300);
+      const ranked = rankDocs(searchText, pool);
+      const byRelevance = !sort || sort === "newest" || sort === "relevance";
+      if (byRelevance) {
+        const pageIds = ranked.slice((page - 1) * limit, page * limit).map((d) => String(d._id));
+        const found = await Product.find({ _id: { $in: pageIds } }).populate("shop", SHOP_SELECT);
+        const order = new Map(pageIds.map((id, i) => [id, i]));
+        found.sort((a: any, b: any) => (order.get(String(a._id)) ?? 0) - (order.get(String(b._id)) ?? 0));
+        return res.json({ success: true, data: found, pagination: { total: ranked.length, page, pages: Math.ceil(ranked.length / limit) } });
+      }
+      query._id = { $in: ranked.map((d) => d._id) }; // another sort was chosen: same matches, that order
+    }
 
     const [total, products] = await Promise.all([
       Product.countDocuments(query),
@@ -178,6 +195,29 @@ export const getProducts = async (req: Request, res: Response) => {
     });
   } catch (error) {
     sendError(res, error, "Failed to retrieve products");
+  }
+};
+
+// --------------------------------------------------
+// SEARCH SUGGESTIONS (as the customer types)
+// GET /api/products/suggest?q=tat
+// --------------------------------------------------
+
+export const suggestProducts = async (req: Request, res: Response) => {
+  try {
+    const q = typeof req.query.q === "string" ? req.query.q.trim().slice(0, 60) : "";
+    if (q.length < 2) return res.json({ success: true, data: [] });
+    const hidden: any[] = await Shop.find({ status: { $ne: "approved" } }).distinct("_id");
+    const pool: any[] = await Product.find({ isActive: true, ...(hidden.length ? { shop: { $nin: hidden } } : {}) })
+      .select("name brand category sku barcode")
+      .sort({ createdAt: -1 })
+      .limit(SEARCH_POOL)
+      .lean();
+    const top = rankDocs(q, pool, 6).map((d: any) => ({ _id: d._id, name: d.name, category: d.category }));
+    res.set("Cache-Control", "public, max-age=30");
+    return res.json({ success: true, data: top });
+  } catch (error) {
+    sendError(res, error, "Failed to load suggestions");
   }
 };
 
