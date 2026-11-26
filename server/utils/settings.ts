@@ -38,6 +38,7 @@ export type PlatformSettings = {
   themeOverride: string; // "auto" (by date), "off" (always the normal colours) or a season id
   seasonDates: string; // JSON {season: [from, to]} that replaces the built-in festival dates ("" = built-in)
   allowCod: boolean;
+  deliveryOtp: string; // "off", "cod" (cash orders only) or "all": the customer's code the delivery partner must enter
   shopsCanAssignDrivers: boolean; // can shop owners assign delivery partners to their own orders?
   lowStockLevel: number;
   announcement: string; // site-wide message shown on the storefront
@@ -59,6 +60,7 @@ const defaults = (): PlatformSettings => ({
   themeOverride: "auto",
   seasonDates: "",
   allowCod: process.env.ALLOW_COD !== "false",
+  deliveryOtp: process.env.DELIVERY_OTP || "cod",
   shopsCanAssignDrivers: process.env.SHOPS_CAN_ASSIGN_DRIVERS !== "false",
   lowStockLevel: num(process.env.LOW_STOCK_LEVEL, 5),
   announcement: "",
@@ -100,6 +102,10 @@ export const saveSettings = async (patch: Record<string, any>, userId?: any) => 
     else if (k === "themeOverride") {
       const v = String(patch[k] ?? "auto");
       if (v !== "auto" && v !== "off" && !(THEME_SEASONS as readonly string[]).includes(v)) throw new Error("Unknown theme");
+      clean[k] = v;
+    } else if (k === "deliveryOtp") {
+      const v = String(patch[k] ?? "cod");
+      if (!["off", "cod", "all"].includes(v)) throw new Error("deliveryOtp must be off, cod or all");
       clean[k] = v;
     } else if (k === "seasonDates") clean[k] = cleanSeasonDates(patch[k]);
     else if (k === "gstin") {

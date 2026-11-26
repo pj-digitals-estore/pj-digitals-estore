@@ -31,6 +31,7 @@ import { notify } from "../utils/notify.js";
 import { alertOps, escapeHtml } from "../utils/telegram.js";
 import { logActivity } from "../utils/activity.js";
 import { getSettings } from "../utils/settings.js";
+import { codeForCustomer } from "../utils/deliveryOtp.js";
 import { razorpayConfigured } from "../utils/razorpay.js";
 import { createCheckoutPayment } from "./paymentController.js";
 
@@ -91,7 +92,10 @@ export const getOrders = async (req: Request, res: Response) => {
       .populate("shop", "name phone location")
       .sort("-createdAt");
 
-    res.json({ success: true, data: await attachDeliveries(orders) });
+    const mode = (await getSettings()).deliveryOtp;
+    // the customer's own delivery code, only while the order is on its way
+    const data = (await attachDeliveries(orders)).map((o: any) => ({ ...o, deliveryCode: codeForCustomer(o, mode) }));
+    res.json({ success: true, data });
   } catch (error) {
     sendError(res, error, "Failed to fetch orders");
   }
@@ -128,7 +132,9 @@ export const getOrder = async (req: Request, res: Response) => {
     }
 
     const [withDelivery] = await attachDeliveries([order]);
-    return res.json({ success: true, data: withDelivery });
+    // only the customer who ordered sees the delivery code (not the shop, the driver or an admin)
+    const code = customerId === req.user._id.toString() ? codeForCustomer(order, (await getSettings()).deliveryOtp) : undefined;
+    return res.json({ success: true, data: code ? { ...withDelivery, deliveryCode: code } : withDelivery });
   } catch (error) {
     sendError(res, error, "Failed to fetch order");
   }
