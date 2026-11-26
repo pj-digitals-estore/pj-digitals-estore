@@ -76,6 +76,7 @@ import {
   adminReorderLocations,
   adminUpdateLocation,
 } from "../controllers/locationController.js";
+import { insightsReport } from "../controllers/insightsController.js";
 import { adminCreateCoupon, adminDeleteCoupon, adminListCoupons, adminUpdateCoupon } from "../controllers/couponController.js";
 import {
   adminCancelRefund,
@@ -174,6 +175,7 @@ AdminRouter.get("/ledger", adminLedger);
 AdminRouter.post("/ledger/backfill", adminLedgerBackfill);
 AdminRouter.get("/reports/sales", salesReport);
 AdminRouter.get("/reports/shops", shopsReport);
+AdminRouter.get("/reports/insights", insightsReport);
 AdminRouter.get("/reports/reconciliation", reconciliation);
 AdminRouter.post("/orders/expire-unpaid", expireUnpaidOrders);
 AdminRouter.get("/payments/export.csv", exportOrdersCsv);
