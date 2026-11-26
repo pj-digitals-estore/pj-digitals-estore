@@ -10,6 +10,7 @@ import { destroyImages, uploadImage } from "../utils/imageStore.js";
 import { notify, notifyAdmins } from "../utils/notify.js";
 import { transitionOrder } from "../utils/orderHelpers.js";
 import { getSettings } from "../utils/settings.js";
+import { checkOtp, OTP_MAX_ATTEMPTS, otpFor, otpRequired } from "../utils/deliveryOtp.js";
 
 const ACTIVE = ["assigned", "accepted", "picked_up", "on_the_way"];
 
@@ -144,13 +145,22 @@ const JOB_POPULATE = {
   select: "orderNumber items totalAmount paymentMethod paymentStatus orderStatus notes",
 };
 
+/** Adds otpRequired (does the driver need the customer's code to finish?) and otpLocked to each job. */
+const withOtpFlag = async (jobs: any[]) => {
+  const mode = (await getSettings()).deliveryOtp;
+  return jobs.map((j) => {
+    const o = j.toObject ? j.toObject() : j;
+    return { ...o, otpRequired: otpRequired(mode, o.order?.paymentMethod), otpLocked: (o.otpAttempts ?? 0) >= OTP_MAX_ATTEMPTS };
+  });
+};
+
 // GET /api/delivery/jobs?scope=active|all   (default active)
 export const getJobs = async (req: Request, res: Response) => {
   try {
     const query: any = { driver: req.driver._id };
     if (req.query.scope !== "all") query.status = { $in: ACTIVE };
     const jobs = await Delivery.find(query).populate(JOB_POPULATE).sort("-assignedAt");
-    res.json({ success: true, data: jobs });
+    res.json({ success: true, data: await withOtpFlag(jobs) });
   } catch (error) {
     sendError(res, error, "Failed to fetch jobs");
   }
@@ -165,7 +175,7 @@ export const getJob = async (req: Request, res: Response) => {
     if (!job) {
       return res.status(404).json({ success: false, message: "Job not found" });
     }
-    res.json({ success: true, data: job });
+    res.json({ success: true, data: (await withOtpFlag([job]))[0] });
   } catch (error) {
     sendError(res, error, "Failed to fetch job");
   }
@@ -237,6 +247,21 @@ export const updateJobStatus = async (req: Request, res: Response) => {
       return res
         .status(400)
         .json({ success: false, message: "This order has been cancelled" });
+    }
+
+    // The customer's code is checked BEFORE anything changes.
+    if (status === "delivered" && otpRequired((await getSettings()).deliveryOtp, order.paymentMethod)) {
+      if ((job.otpAttempts ?? 0) >= OTP_MAX_ATTEMPTS) {
+        return res.status(423).json({ success: false, code: "otp_locked", message: "Too many wrong codes. Call the shop or admin to complete this delivery." });
+      }
+      if (!req.body?.otp) {
+        return res.status(400).json({ success: false, code: "otp_required", message: "Ask the customer for their 4-digit delivery code." });
+      }
+      if (!checkOtp(req.body.otp, otpFor(order._id))) {
+        const after: any = await Delivery.findByIdAndUpdate(job._id, { $inc: { otpAttempts: 1 } }, { new: true });
+        const left = Math.max(0, OTP_MAX_ATTEMPTS - (after?.otpAttempts ?? OTP_MAX_ATTEMPTS));
+        return res.status(400).json({ success: false, code: "otp_wrong", message: left > 0 ? `That code is wrong. ${left} ${left === 1 ? "try" : "tries"} left.` : "Too many wrong codes. Call the shop or admin to complete this delivery." });
+      }
     }
 
     const now = new Date();

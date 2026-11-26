@@ -77,6 +77,14 @@ import {
   adminUpdateLocation,
 } from "../controllers/locationController.js";
 import {
+  adminCancelRefund,
+  adminCompleteRefund,
+  adminCreateRefund,
+  adminLedger,
+  adminLedgerBackfill,
+  adminListRefunds,
+} from "../controllers/refundController.js";
+import {
   adminListTickets,
   adminUpdateTicket,
 } from "../controllers/supportController.js";
@@ -153,6 +161,12 @@ AdminRouter.put("/tickets/:id", validateObjectId("id"), adminUpdateTicket);
 
 // payments, reports, settlements
 AdminRouter.get("/payments", listPayments);
+AdminRouter.get("/refunds", adminListRefunds);
+AdminRouter.post("/refunds", adminCreateRefund);
+AdminRouter.put("/refunds/:id/complete", validateObjectId("id"), adminCompleteRefund);
+AdminRouter.put("/refunds/:id/cancel", validateObjectId("id"), adminCancelRefund);
+AdminRouter.get("/ledger", adminLedger);
+AdminRouter.post("/ledger/backfill", adminLedgerBackfill);
 AdminRouter.get("/reports/sales", salesReport);
 AdminRouter.get("/reports/shops", shopsReport);
 AdminRouter.get("/reports/reconciliation", reconciliation);

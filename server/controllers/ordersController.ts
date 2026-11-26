@@ -31,6 +31,8 @@ import { notify } from "../utils/notify.js";
 import { alertOps, escapeHtml } from "../utils/telegram.js";
 import { logActivity } from "../utils/activity.js";
 import { getSettings } from "../utils/settings.js";
+import { codeForCustomer } from "../utils/deliveryOtp.js";
+import { ensureInvoice } from "../utils/invoices.js";
 import { razorpayConfigured } from "../utils/razorpay.js";
 import { createCheckoutPayment } from "./paymentController.js";
 
@@ -91,7 +93,10 @@ export const getOrders = async (req: Request, res: Response) => {
       .populate("shop", "name phone location")
       .sort("-createdAt");
 
-    res.json({ success: true, data: await attachDeliveries(orders) });
+    const mode = (await getSettings()).deliveryOtp;
+    // the customer's own delivery code, only while the order is on its way
+    const data = (await attachDeliveries(orders)).map((o: any) => ({ ...o, deliveryCode: codeForCustomer(o, mode) }));
+    res.json({ success: true, data });
   } catch (error) {
     sendError(res, error, "Failed to fetch orders");
   }
@@ -128,9 +133,27 @@ export const getOrder = async (req: Request, res: Response) => {
     }
 
     const [withDelivery] = await attachDeliveries([order]);
-    return res.json({ success: true, data: withDelivery });
+    // only the customer who ordered sees the delivery code (not the shop, the driver or an admin)
+    const code = customerId === req.user._id.toString() ? codeForCustomer(order, (await getSettings()).deliveryOtp) : undefined;
+    return res.json({ success: true, data: code ? { ...withDelivery, deliveryCode: code } : withDelivery });
   } catch (error) {
     sendError(res, error, "Failed to fetch order");
+  }
+};
+
+// POST /api/orders/:id/invoice   the customer (or an admin) asks for the invoice of a delivered order.
+// Gives it its number if it has none yet (orders delivered before invoices existed), then returns the order.
+export const getInvoice = async (req: Request, res: Response) => {
+  try {
+    const base: any = await Order.findById(req.params.id).select("user orderStatus");
+    if (!base) return res.status(404).json({ success: false, message: "Order not found" });
+    if (String(base.user) !== String(req.user._id) && req.user.role !== "admin") return res.status(403).json({ success: false, message: "Not authorized" });
+    if (base.orderStatus !== "delivered") return res.status(400).json({ success: false, message: "The invoice is available once the order is delivered." });
+    await ensureInvoice(base._id);
+    const order = await Order.findById(base._id).populate("items.product", "name").populate("shop", "name phone location addressLine");
+    res.json({ success: true, data: order });
+  } catch (error) {
+    sendError(res, error, "Failed to prepare the invoice");
   }
 };
 

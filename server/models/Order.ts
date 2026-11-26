@@ -60,6 +60,7 @@ const orderSchema = new mongoose.Schema<IOrder>(
       default: "pending",
     },
     currency: { type: String, default: "INR" },
+    refundedPaise: { type: Number, default: 0, min: 0 }, // total paid back to the customer so far (see Refund / LedgerEntry)
     razorpayOrderId: { type: String, index: true, sparse: true },
     razorpayPaymentId: { type: String },
     razorpaySignature: { type: String },
@@ -94,6 +95,8 @@ const orderSchema = new mongoose.Schema<IOrder>(
     stockRestored: { type: Boolean, default: false },
     paidAt: Date,
     deliveredAt: Date,
+    invoiceNumber: { type: String, index: { unique: true, sparse: true } }, // e.g. INV/26-27/00042, given once the order is delivered
+    invoiceDate: Date,
     cancelledAt: Date,
     cancelReason: { type: String, maxlength: 40 }, // a code from CANCEL_REASONS
     cancelNote: { type: String, maxlength: 200 },

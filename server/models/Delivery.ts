@@ -44,6 +44,7 @@ const deliverySchema = new Schema(
     pickedUpAt: Date,
     deliveredAt: Date,
     failureReason: String,
+    otpAttempts: { type: Number, default: 0 }, // wrong delivery codes typed so far
     driverFee: { type: Number, default: 0 }, // earned by the driver on delivery
     driverSettlement: { type: Schema.Types.ObjectId, ref: "DriverSettlement", index: true },
   },
