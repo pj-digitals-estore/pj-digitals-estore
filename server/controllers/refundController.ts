@@ -2,6 +2,8 @@ import { Request, Response } from "express";
 import Order from "../models/Order.js";
 import Refund from "../models/Refund.js";
 import LedgerEntry from "../models/LedgerEntry.js";
+import ShopAdjustment from "../models/ShopAdjustment.js";
+import { shopChargePaise } from "../utils/shopCharge.js";
 import { HttpError, sendError } from "../utils/http.js";
 import { logActivity } from "../utils/activity.js";
 import { notify } from "../utils/notify.js";
@@ -61,6 +63,7 @@ export const adminCreateRefund = async (req: Request, res: Response) => {
       amountPaise: check.paise,
       reason,
       note: typeof note === "string" ? note.trim().slice(0, 300) : undefined,
+      chargeShop: req.body?.chargeShop === true && !!order.shop,
       requestedBy: req.user?._id,
     });
     await logActivity(req, "refund.created", "Order", order._id, { refund: refund._id, amount: rupees(check.paise), reason });
@@ -100,6 +103,16 @@ export const adminCompleteRefund = async (req: Request, res: Response) => {
       order.refundedPaise = refundedPaise;
       order.paymentStatus = paymentStatusAfter(order, refundedPaise);
       await order.save(opts);
+      // the shop's share, taken on its next settlement (only when the admin chose "shop pays")
+      if (refund.chargeShop) {
+        const fullyRefunded = order.paymentStatus === "refunded";
+        const charge = shopChargePaise({ refundPaise: refund.amountPaise, order, fullyRefunded });
+        if (charge > 0) {
+          await ShopAdjustment.create([{ shop: order.shop, order: order._id, orderNumber: order.orderNumber, refund: refund._id, amountPaise: charge, note: `Refund ${order.orderNumber}`, uniqueKey: `refund:${refund._id}` }], opts);
+        }
+        // an order refunded in full before it was ever settled drops out of the settlement; earlier charges on it are moot
+        if (fullyRefunded && !order.settlement) await ShopAdjustment.updateMany({ order: order._id, status: "pending" }, { status: "void" }, opts);
+      }
       done = refund;
       orderAfter = order;
     });

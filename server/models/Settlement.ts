@@ -13,7 +13,8 @@ const settlementSchema = new Schema(
     commission: Number,
     adjustment: { type: Number, default: 0 }, // admin correction: + bonus / - deduction (refunds, penalties)
     adjustmentNote: String,
-    netPayable: Number, // grossSales - commission + adjustment
+    refundDeduction: { type: Number, default: 0 }, // the shop's share of refunds, taken from this payout (see ShopAdjustment)
+    netPayable: Number, // grossSales - commission + adjustment - refundDeduction
     payoutSnapshot: String, // where it was sent, e.g. "UPI: shop@upi"
     codAmount: Number, // of grossSales, collected as cash on delivery
     onlineAmount: Number, // of grossSales, collected online
