@@ -32,6 +32,10 @@ import { alertOps, escapeHtml } from "../utils/telegram.js";
 import { logActivity } from "../utils/activity.js";
 import { getSettings } from "../utils/settings.js";
 import Refund from "../models/Refund.js";
+import PointsEntry from "../models/PointsEntry.js";
+import { redeemablePoints, earnPoints } from "../utils/loyalty.js";
+import { balanceOf, claimPoints } from "../utils/loyaltyService.js";
+import { splitFee } from "../utils/deliveryPricing.js";
 import { refundView } from "../utils/refundView.js";
 import { codeForCustomer } from "../utils/deliveryOtp.js";
 import { ensureInvoice } from "../utils/invoices.js";
@@ -105,6 +109,17 @@ export const getOrders = async (req: Request, res: Response) => {
     res.json({ success: true, data });
   } catch (error) {
     sendError(res, error, "Failed to fetch orders");
+  }
+};
+
+// GET /api/orders/loyalty -> the customer's points balance and latest movements
+export const getLoyalty = async (req: Request, res: Response) => {
+  try {
+    const s = await getSettings();
+    const [balance, entries] = await Promise.all([balanceOf(req.user._id), PointsEntry.find({ user: req.user._id }).sort("-createdAt").limit(20).select("kind points createdAt").lean()]);
+    res.json({ success: true, data: { enabled: s.loyaltyEnabled, balance, earnPercent: s.loyaltyEarnPercent, maxRedeemPercent: s.loyaltyMaxRedeemPercent, minRedeem: s.loyaltyMinRedeem, entries } });
+  } catch (error) {
+    sendError(res, error, "Failed to load points");
   }
 };
 
@@ -187,6 +202,7 @@ export const createOrder = async (req: Request, res: Response) => {
   let keyHeld = false;
   let succeeded = false;
   let couponClaimed = false;
+  let pointsClaimed = false;
   try {
     if (idemKey) {
       const claim = await claimCheckoutKey(req.user._id, idemKey);
@@ -304,7 +320,18 @@ export const createOrder = async (req: Request, res: Response) => {
       coupon = result.coupon;
       couponDiscount = result.discount;
     }
-    const allTotals = checkoutTotals(subtotals, delivery.fee, settings, couponDiscount);
+    // Loyalty points (only when the customer asked to use them): taken off the goods after any coupon
+    let pointsUsed = 0;
+    if (settings.loyaltyEnabled && req.body.usePoints === true) {
+      pointsUsed = redeemablePoints({
+        balance: await balanceOf(req.user._id),
+        goodsAfterCoupon: subtotals.reduce((a, b) => a + b, 0) - couponDiscount,
+        maxPercent: settings.loyaltyMaxRedeemPercent,
+        minPoints: settings.loyaltyMinRedeem,
+      });
+    }
+    const pointsShare = splitFee(pointsUsed, subtotals);
+    const allTotals = checkoutTotals(subtotals, delivery.fee, settings, couponDiscount + pointsUsed);
 
     // COD limit: checked on the whole checkout BEFORE any stock is reserved
     if (paymentMethod === "cod" && Number(settings.codMaxAmount) > 0) {
@@ -330,6 +357,10 @@ export const createOrder = async (req: Request, res: Response) => {
       await claimCoupon(coupon, req.user._id, checkoutId, couponDiscount);
       couponClaimed = true;
     }
+    if (pointsUsed > 0) {
+      await claimPoints(req.user._id, checkoutId, pointsUsed);
+      pointsClaimed = true;
+    }
     const orders: any[] = [];
     for (const [index, shopKey] of shopKeys.entries()) {
       const items = groups.get(shopKey)!;
@@ -351,7 +382,8 @@ export const createOrder = async (req: Request, res: Response) => {
         paymentOption: String(req.body.paymentMethod || "cod").toLowerCase(),
         paymentStatus: "pending",
         ...totals,
-        ...(totals.discount > 0 ? { couponCode: coupon?.code } : {}),
+        ...(coupon && totals.discount > 0 ? { couponCode: coupon.code } : {}),
+        pointsDiscount: Math.min(pointsShare[index] ?? 0, totals.discount),
         money: buildMoney(totals, who),
         notes: req.body.notes,
         orderNumber: generateOrderNumber(),
@@ -412,7 +444,7 @@ export const createOrder = async (req: Request, res: Response) => {
     res.status(201).json({ success: true, data: orders, checkoutId, summary, payment });
   } catch (error) {
     if (checkoutId) await Order.deleteMany({ checkoutId, paymentStatus: "pending" }).catch(() => {});
-    if (couponClaimed && checkoutId) await releaseCoupon(checkoutId, true).catch(() => {});
+    if ((couponClaimed || pointsClaimed) && checkoutId) await releaseCoupon(checkoutId, true).catch(() => {});
     if (reserved.length) await restoreStockLines(reserved).catch(() => {});
     sendError(res, error, "Failed to create order");
   } finally {
@@ -488,7 +520,17 @@ export const getQuote = async (req: Request, res: Response) => {
       if (result.ok) couponInfo = { code: result.coupon.code, description: result.coupon.description, discount: result.discount };
       else couponError = result.reason;
     }
-    const totals = checkoutTotals(subtotals, delivery.fee, settings, couponInfo?.discount ?? 0);
+    // loyalty: what the customer could spend, and (when they ticked "use points") applied to the price
+    const goodsTotal = subtotals.reduce((a, b) => a + b, 0);
+    let loyalty: any = { enabled: false };
+    let pointsApplied = 0;
+    if (settings.loyaltyEnabled) {
+      const balance = await balanceOf(req.user._id);
+      const usable = redeemablePoints({ balance, goodsAfterCoupon: goodsTotal - (couponInfo?.discount ?? 0), maxPercent: settings.loyaltyMaxRedeemPercent, minPoints: settings.loyaltyMinRedeem });
+      pointsApplied = req.query.points === "1" ? usable : 0;
+      loyalty = { enabled: true, balance, usable, applied: pointsApplied, minRedeem: settings.loyaltyMinRedeem, willEarn: earnPoints(goodsTotal - (couponInfo?.discount ?? 0) - pointsApplied, settings.loyaltyEarnPercent) };
+    }
+    const totals = checkoutTotals(subtotals, delivery.fee, settings, (couponInfo?.discount ?? 0) + pointsApplied);
     const groups = sorted.map((g, i) => ({
       shop: g.shop && { _id: g.shop._id, name: g.shop.name, logo: g.shop.logo, location: g.shop.location, isOpen: g.shop.isOpen },
       items: g.items,
@@ -503,7 +545,7 @@ export const getQuote = async (req: Request, res: Response) => {
 
     res.json({
       success: true,
-      data: { ...base, empty: false, groups, issues, summary, delivery: deliveryInfo, coupon: couponInfo, couponError, canCheckout: issues.length === 0 && groups.length > 0, cod: { ...base.cod, allowed: !codWhy, reason: codWhy } },
+      data: { ...base, empty: false, groups, issues, summary, delivery: deliveryInfo, coupon: couponInfo, couponError, loyalty, canCheckout: issues.length === 0 && groups.length > 0, cod: { ...base.cod, allowed: !codWhy, reason: codWhy } },
     });
   } catch (error) {
     sendError(res, error, "Failed to price your cart");

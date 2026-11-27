@@ -36,7 +36,7 @@ export const insightsReport = async (req: Request, res: Response) => {
       ]),
       Order.aggregate([
         { $match: { ...live, couponCode: { $exists: true, $ne: null } } },
-        { $group: { _id: "$couponCode", orders: { $sum: 1 }, discount: { $sum: { $ifNull: ["$discount", 0] } }, gross: { $sum: "$totalAmount" } } },
+        { $group: { _id: "$couponCode", orders: { $sum: 1 }, discount: { $sum: { $subtract: [{ $ifNull: ["$discount", 0] }, { $ifNull: ["$pointsDiscount", 0] }] } }, gross: { $sum: "$totalAmount" } } },
         { $sort: { discount: -1 } }, { $limit: 20 },
       ]),
       Order.aggregate([{ $match: live }, { $group: { _id: "$paymentMethod", orders: { $sum: 1 }, gross: { $sum: "$totalAmount" } } }, { $sort: { gross: -1 } }]),

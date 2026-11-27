@@ -44,6 +44,10 @@ export type PlatformSettings = {
   announcement: string; // site-wide message shown on the storefront
   supportPhone: string;
   supportEmail: string;
+  loyaltyEnabled: boolean; // customers earn points on delivered orders and can spend them (1 point = Rs 1)
+  loyaltyEarnPercent: number; // points earned per Rs 100 of goods paid (2 = 2%)
+  loyaltyMaxRedeemPercent: number; // most of an order's goods that points can pay for
+  loyaltyMinRedeem: number; // fewest points that can be spent at once
 };
 
 const num = (v: any, fallback: number) => (v !== undefined && v !== "" && Number.isFinite(Number(v)) ? Number(v) : fallback);
@@ -66,6 +70,10 @@ const defaults = (): PlatformSettings => ({
   announcement: "",
   supportPhone: "",
   supportEmail: "",
+  loyaltyEnabled: process.env.LOYALTY_ENABLED === "true",
+  loyaltyEarnPercent: num(process.env.LOYALTY_EARN_PERCENT, 2),
+  loyaltyMaxRedeemPercent: num(process.env.LOYALTY_MAX_REDEEM_PERCENT, 20),
+  loyaltyMinRedeem: num(process.env.LOYALTY_MIN_REDEEM, 50),
 });
 
 let cache: { at: number; value: PlatformSettings } | null = null;
@@ -98,7 +106,11 @@ export const saveSettings = async (patch: Record<string, any>, userId?: any) => 
   for (const k of Object.keys(patch)) {
     if (!(k in base)) continue;
     if (k === "commissionRate" || k === "taxRate") rate(k);
-    else if (["driverFee", "shippingCost", "freeShippingThreshold", "lowStockLevel", "codMaxAmount"].includes(k)) money(k);
+    else if (k === "loyaltyEarnPercent" || k === "loyaltyMaxRedeemPercent") {
+      const n = Number(patch[k]);
+      if (!Number.isFinite(n) || n < 0 || n > (k === "loyaltyEarnPercent" ? 20 : 50)) throw new Error(`${k} must be between 0 and ${k === "loyaltyEarnPercent" ? 20 : 50}`);
+      clean[k] = n;
+    } else if (["driverFee", "shippingCost", "freeShippingThreshold", "lowStockLevel", "codMaxAmount", "loyaltyMinRedeem"].includes(k)) money(k);
     else if (k === "themeOverride") {
       const v = String(patch[k] ?? "auto");
       if (v !== "auto" && v !== "off" && !(THEME_SEASONS as readonly string[]).includes(v)) throw new Error("Unknown theme");
@@ -112,7 +124,7 @@ export const saveSettings = async (patch: Record<string, any>, userId?: any) => 
       const g = String(patch[k] ?? "").trim().toUpperCase();
       if (g && !/^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z][1-9A-Z]Z[0-9A-Z]$/.test(g)) throw new Error("That GSTIN does not look right (15 characters, e.g. 32ABCDE1234F1Z5)");
       clean[k] = g;
-    } else if (k === "allowCod" || k === "shopsCanAssignDrivers" || k === "gstRegistered") clean[k] = patch[k] === true || patch[k] === "true";
+    } else if (k === "allowCod" || k === "shopsCanAssignDrivers" || k === "gstRegistered" || k === "loyaltyEnabled") clean[k] = patch[k] === true || patch[k] === "true";
     else clean[k] = String(patch[k] ?? "").slice(0, 300);
   }
   const doc: any = await Setting.findOne({ key: "platform" });

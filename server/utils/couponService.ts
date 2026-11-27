@@ -4,6 +4,7 @@ import Order from "../models/Order.js";
 import { HttpError } from "./http.js";
 import { paiseOf } from "./money.js";
 import { checkCoupon, normalizeCode } from "./coupons.js";
+import { releasePoints } from "./loyaltyService.js";
 
 /** Looks the code up and checks it for this user and cart. Returns the coupon and the discount, or a reason. */
 export const evaluateForUser = async (rawCode: unknown, userId: any, subtotal: number) => {
@@ -48,6 +49,7 @@ export const claimCoupon = async (coupon: any, userId: any, checkoutId: string, 
 export const releaseCoupon = async (checkoutId: string, force = false) => {
   if (!checkoutId) return;
   if (!force && (await Order.exists({ checkoutId, orderStatus: { $ne: "cancelled" } }))) return;
+  await releasePoints(checkoutId); // loyalty points spent on the same checkout come back at the same moments
   const row: any = await CouponRedemption.findOneAndDelete({ checkoutId });
   if (row) await Coupon.updateOne({ _id: row.coupon, usedCount: { $gt: 0 } }, { $inc: { usedCount: -1 } });
 };

@@ -62,6 +62,7 @@ const orderSchema = new mongoose.Schema<IOrder>(
     currency: { type: String, default: "INR" },
     discount: { type: Number, default: 0, min: 0 }, // coupon discount on the goods (platform-paid)
     couponCode: String,
+    pointsDiscount: { type: Number, default: 0, min: 0 }, // part of `discount` paid with loyalty points (the rest is the coupon)
     refundedPaise: { type: Number, default: 0, min: 0 }, // total paid back to the customer so far (see Refund / LedgerEntry)
     razorpayOrderId: { type: String, index: true, sparse: true },
     razorpayPaymentId: { type: String },

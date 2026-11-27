@@ -152,6 +152,7 @@ export interface IOrder extends Document {
   razorpayPaymentId?: string;
   refundedPaise?: number;
   discount?: number;
+  pointsDiscount?: number;
   couponCode?: string;
   invoiceNumber?: string;
   invoiceDate?: Date;
