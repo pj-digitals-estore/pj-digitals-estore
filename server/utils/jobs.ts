@@ -3,6 +3,7 @@ import ActivityLog from "../models/ActivityLog.js";
 import { createJobLoop } from "./jobLoop.js";
 import { expireUnpaidOrders } from "./orderExpiry.js";
 import Order from "../models/Order.js";
+import { sendDueReminders } from "./subscriptionReminders.js";
 import { alertOps, errorText, escapeHtml } from "./telegram.js";
 
 /** Takes the named lock for ttlMs. false = another run holds it. */
@@ -79,5 +80,18 @@ export const startJobs = () => {
     onError: (e) => console.error("stuck-orders job failed:", e),
   });
   stuck.start();
+
+  // Repeat-order reminders (8 am India time; the job just looks every 30 minutes for what is due)
+  const repeat = createJobLoop({
+    intervalMs: 30 * 60 * 1000,
+    firstDelayMs: 2 * 60 * 1000,
+    run: async () => {
+      if (!(await acquireLock("repeat-reminders", 10 * 60 * 1000))) return;
+      let result: any;
+      try { result = { sent: await sendDueReminders() }; } finally { await releaseLock("repeat-reminders", result).catch(() => {}); }
+    },
+    onError: (e) => console.error("repeat-reminders job failed:", e),
+  });
+  repeat.start();
   console.log("Background jobs started: expire-unpaid every 5 min, stuck-orders every 30 min.");
 };
