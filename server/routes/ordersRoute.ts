@@ -4,6 +4,7 @@ import {
   createOrder,
   getAllOrders,
   getInvoice,
+  getLoyalty,
   getOrder,
   getOrders,
   getQuote,
@@ -19,6 +20,7 @@ OrderRouter.use(protect);
 
 OrderRouter.get("/", getOrders);
 OrderRouter.get("/quote", getQuote); // before "/:id"
+OrderRouter.get("/loyalty", getLoyalty);
 OrderRouter.post("/", createOrder);
 
 // admin (declared before "/:id" routes)

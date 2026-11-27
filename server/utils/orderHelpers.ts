@@ -7,6 +7,7 @@ import { logMovements } from "./stockLog.js";
 import { recordPayment } from "./ledger.js";
 import { ensureInvoice } from "./invoices.js";
 import { releaseCoupon } from "./couponService.js";
+import { awardForOrder } from "./loyaltyService.js";
 
 export const generateOrderNumber = () =>
   "ORD-" +
@@ -172,6 +173,7 @@ export const transitionOrder = async (
   await order.save();
   if (next === "delivered" && order.paymentMethod === "cod" && order.paymentStatus === "paid") await recordPayment(order);
   if (next === "delivered") await ensureInvoice(order._id).catch((e) => console.error("invoice number failed:", e)); // never blocks the delivery
+  if (next === "delivered") await awardForOrder(order); // loyalty points (once per order, never blocks)
   if (next === "cancelled") {
     await restoreOrderStock(order._id);
     if (order.checkoutId) await releaseCoupon(order.checkoutId).catch(() => {}); // the coupon use is returned once the whole checkout is cancelled
