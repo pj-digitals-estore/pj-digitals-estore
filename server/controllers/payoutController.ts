@@ -130,6 +130,7 @@ export const exportShopSettlements = async (req: Request, res: Response) => {
           gross: s.grossSales,
           commission: s.commission,
           adjustment: s.adjustment,
+          refundDeduction: s.refundDeduction || 0,
           netPayable: s.netPayable,
           reference: s.reference,
           paidAt: s.paidAt,

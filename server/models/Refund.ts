@@ -11,6 +11,7 @@ const refundSchema = new Schema(
     reason: { type: String, default: "other" },
     note: { type: String, maxlength: 300 },
     status: { type: String, enum: ["pending", "completed", "cancelled"], default: "pending", index: true },
+    chargeShop: { type: Boolean, default: false }, // the shop gives back its share on its next settlement
     reference: { type: String, maxlength: 120 },
     requestedBy: { type: Schema.Types.ObjectId, ref: "User" },
     completedBy: { type: Schema.Types.ObjectId, ref: "User" },

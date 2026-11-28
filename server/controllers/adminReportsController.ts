@@ -9,6 +9,8 @@ import { getSettings } from "../utils/settings.js";
 import { payoutLabel, toCsv, unsettledFor } from "../utils/payouts.js";
 import { logActivity } from "../utils/activity.js";
 import { notify } from "../utils/notify.js";
+import ShopAdjustment from "../models/ShopAdjustment.js";
+import { fitCharges } from "../utils/shopCharge.js";
 import { restoreOrderStock } from "../utils/orderHelpers.js";
 import { expireUnpaidOrders as expireUnpaid } from "../utils/orderExpiry.js";
 
@@ -229,6 +231,18 @@ export const expireUnpaidOrders = async (req: Request, res: Response) => {
 
 // ===================== SETTLEMENTS / PAYOUTS =====================
 
+/** The refund deductions waiting for a shop, and how much of them this settlement can take (oldest first). */
+const pendingCharges = async (shopId: any) => ShopAdjustment.find({ shop: shopId, status: "pending" }).sort({ createdAt: 1 }).lean() as Promise<any[]>;
+const chargesPreview = async (shopId: any, netRupees: number) => {
+  const all = await pendingCharges(shopId);
+  const fit = fitCharges(all.map((c) => ({ ...c, amountPaise: c.amountPaise })), Math.round(netRupees * 100));
+  const ids = new Set(fit.applied.map((c: any) => String(c._id)));
+  return {
+    charges: all.map((c) => ({ _id: c._id, orderNumber: c.orderNumber, amount: c.amountPaise / 100, fits: ids.has(String(c._id)) })),
+    chargesApplied: fit.totalPaise / 100,
+  };
+};
+
 // GET /api/admin/payouts/preview?shopId=&to=&commissionRate=
 // What a settlement would contain right now, without creating it.
 export const previewSettlement = async (req: Request, res: Response) => {
@@ -239,7 +253,7 @@ export const previewSettlement = async (req: Request, res: Response) => {
     const { orders, ...figures } = u;
     res.json({
       success: true,
-      data: { ...figures, payout: shop.payout || null, payoutLabel: payoutLabel(shop.payout), orders },
+      data: { ...figures, payout: shop.payout || null, payoutLabel: payoutLabel(shop.payout), orders, ...(await chargesPreview(shop._id, figures.net)) },
     });
   } catch (error) {
     sendError(res, error, "Failed to preview settlement");
@@ -318,6 +332,9 @@ const settleShop = async (shop: any, req: Request, opts: { to?: any; rate?: any;
   const u = await unsettledFor(shop, opts);
   if (u.ordersCount === 0) return null;
   const adjustment = round2(Number(opts.adjustment) || 0);
+  // refund deductions the shop owes: only as much as this payout can cover, the rest waits
+  const fit = fitCharges(await pendingCharges(shop._id), Math.round((u.net + adjustment) * 100));
+  const refundDeduction = round2(fit.totalPaise / 100);
   const settlement: any = await Settlement.create({
     shop: shop._id,
     periodFrom: u.periodFrom,
@@ -329,7 +346,8 @@ const settleShop = async (shop: any, req: Request, opts: { to?: any; rate?: any;
     commission: u.commission,
     adjustment,
     adjustmentNote: opts.adjustmentNote,
-    netPayable: round2(u.net + adjustment),
+    refundDeduction,
+    netPayable: round2(u.net + adjustment - refundDeduction),
     payoutSnapshot: payoutLabel(shop.payout),
     codAmount: u.codAmount,
     onlineAmount: u.onlineAmount,
@@ -341,8 +359,12 @@ const settleShop = async (shop: any, req: Request, opts: { to?: any; rate?: any;
     { _id: { $in: settlement.orders }, settlement: { $exists: false } },
     { settlement: settlement._id },
   );
-  if (claimed.modifiedCount !== u.ordersCount) {
+  const takenCharges = fit.applied.length
+    ? await ShopAdjustment.updateMany({ _id: { $in: fit.applied.map((c: any) => c._id) }, status: "pending" }, { status: "applied", settlement: settlement._id })
+    : { modifiedCount: 0 };
+  if (claimed.modifiedCount !== u.ordersCount || takenCharges.modifiedCount !== fit.applied.length) {
     await Order.updateMany({ settlement: settlement._id }, { $unset: { settlement: 1 } });
+    await ShopAdjustment.updateMany({ settlement: settlement._id }, { status: "pending", $unset: { settlement: 1 } });
     await settlement.deleteOne();
     throw new HttpError(409, "Orders changed while settling - please retry");
   }
@@ -457,7 +479,7 @@ export const updateSettlement = async (req: Request, res: Response) => {
       const adj = Number(req.body.adjustment);
       if (!Number.isFinite(adj)) return res.status(400).json({ success: false, message: "adjustment must be a number" });
       settlement.adjustment = round2(adj);
-      settlement.netPayable = round2(settlement.grossSales - settlement.commission + settlement.adjustment);
+      settlement.netPayable = round2(settlement.grossSales - settlement.commission + settlement.adjustment - (settlement.refundDeduction || 0));
     }
     if (req.body.adjustmentNote !== undefined) settlement.adjustmentNote = req.body.adjustmentNote;
     if (req.body.reference !== undefined) settlement.reference = req.body.reference;
@@ -467,6 +489,8 @@ export const updateSettlement = async (req: Request, res: Response) => {
       settlement.status = "void";
       if (req.body.reason) settlement.notes = [settlement.notes, `Voided: ${req.body.reason}`].filter(Boolean).join(" | ");
       await Order.updateMany({ settlement: settlement._id }, { $unset: { settlement: 1 } });
+      // refund deductions it had taken go back to waiting for the next settlement
+      await ShopAdjustment.updateMany({ settlement: settlement._id, status: "applied" }, { status: "pending", $unset: { settlement: 1 } });
     } else if (status === "paid") {
       if (settlement.netPayable < 0) {
         return res.status(400).json({ success: false, message: "Net payable is negative - adjust it or void this settlement" });
